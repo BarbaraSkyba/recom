@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KultUkr_finding(Chat)</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js" integrity="sha512-3gJwYpMe3QewGELv8k/BX9vcqhryRdzRMxVfq6ngyWXwo03GFEzjsUm8Q7RZcHPHksttq7/GFoxjCVUjkjvPdw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js" integrity="sha512-zoJXRvW2gC8Z0Xo3lBbao5+AS3g6YWr5ztKqaicua11xHo+AvE1b0lT9ODgrHTmNUxeCw0Ry4BGRYZfXu70weg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    
+    <link rel="stylesheet" href={{url_for('static', filename="css/main.css")}}>
+    <script src={{url_for('static', filename="js/main.js")}}></script>
+    <script>
+      $(document).ready(function(){
+            var $$tempUserId = new Date().getTime()
+            /*
+            var socket = io.connect("http://127.0.0.1:5000")
+            socket.on('connect', function(){
+                socket.send("User connected!");
+            })
+            socket.on('message', function(data) {
+                $('#messages').append($('p').text(data));
+            })
+            */
+            $('#sendBtn2').on('click', function() {
+                /*socket.send($$tempUserId + ': ' + $('#question').val())*/
+                $('#question').val('')
+            })
+            $('#sendBtn').on('click', function() {
+                /* socket.send($$tempUserId + ': ' + $('#question').val())
+                $('#question').val('')*/
+                //let txt = document.getElementById("question")
+                console.log('btn', $$tempUserId, $('#question').val())
+                let msg = JSON.stringify({user: $$tempUserId, 
+                                          msg: $('#question').val() })
+                myurl = window.location.href.replace('/chat','/post')//"http://re.com:5000/post"
+                //msg = { name: "John", time: "2pm" }
+                /*
+                $.post("http://127.0.0.1:5000/post", msg, function(result) {
+                  console.log(result); 
+                });
+                */
+                q = "<span><b>Q:</b></span> "
+                $('#messages').append(q).append($("<span style='background-color: #aadcf3;     padding: 2px 5px; border-radius: 5px;'>").text($('#question').val())).append('<div></div>');
+                $.post({
+                    url: myurl,
+                    data: JSON.stringify(msg),
+                    contentType: 'application/json; charset=utf-8'
+                })
+                .done(function (response) {
+                    //Do something on success response...
+                    console.log('res', response)
+                    response.forEach(item=>{ 
+                    al = "<b><a href='" + item.u + "'>Link</a></b>"
+                    a = "<b>A:</b> " //+ response.a
+                    $('#messages').append(a).append(al).append('<div></div>').append($('<span>').text(item.a)).append('<div></div>');
+                });
+              })
+                /*    
+                $.ajax ({
+                    url: myurl,
+                    type: "POST",
+                    data: JSON.stringify(msg),
+                    dataType: "json",
+                    contentType: "application/json; charset=utf-8",
+                    success: function(){
+                      console.log('success!', result); 
+                    }
+                });
+                */
+                $('#question').val('')
+            })
+            function submitOnEnter(event) {
+                  console.log('dddd')
+                  if (event.which === 13) {
+                      if (!event.repeat) {
+                        /*
+                          const newEvent = new Event("submit", {cancelable: true});
+                          event.target.form.dispatchEvent(newEvent);
+                          */
+                        // Create the event
+                        let element = document.getElementById("sendBtn");
+                        element.dispatchEvent(new Event("click"));
+                      }
+
+                      event.preventDefault(); // Prevents the addition of a new line in the text field
+                  }
+              }
+              $('#question').on('keydown', submitOnEnter)
+              //document.getElementById("usermsg").addEventListener("keydown", submitOnEnter);
+              console.log('t', $$tempUserId)
+            })
+
+
+    </script>
+</head>
+<body>
+    <nav class="navbar navbar-inverse navbar-fixed-top">
+        <div class="container-fluid">
+          <div class="navbar-header">
+            <a class="navbar-brand" href="/">KultUkr_finding</a>
+          </div>
+          <ul class="nav navbar-nav">
+            <li class="active dropdown">
+                <a class="dropdown-toggle" data-toggle="dropdown" href="#">Maintenance
+                <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                    <li><a href="/crawl_ku">Crawling</a></li>
+                    <li><a href="/token">Clean&Tokenaze</a></li>
+                    <li><a href="/embedding">Embedding</a></li>
+                </ul>
+            </li>
+            <li><a href="/chat">Chat</a></li> 
+            <li><a href="/upload">Upload</a></li>     
+            <li><a href="/synonym">Synonym</a></li>       
+          </ul>
+          <ul class="nav navbar-nav navbar-right">
+            <li><a href="#"><span class="glyphicon glyphicon-user"></span> Sign Up</a></li>
+            <li><a href="#"><span class="glyphicon glyphicon-log-in"></span> Login</a></li>
+          </ul>
+        </div>
+    </nav>
+    <div class="container" style="margin-top:50px">
+        {% if web_data %}
+        <div class="with_border">
+            <div class="block_title" style="font-weight: bold; margin-bottom: 10px">Chat:</div>
+            <div class="block_title" id="messages" style="width: 100%; height: calc(90vh - 20px); overflow: auto;"></div>
+        </div>
+        <div style="position: absolute; background-color: rgb(186, 186, 252); 
+                                  height: 60px; width: 100%; display: flex; align-items: center; 
+                                  justify-content: space-between; left: 0; bottom: 0; padding: 5px;">
+          <div style="width: 100%;">
+            <textarea type="text" rows="2" id="question" placeholder="Question" style="width: 95%; margin: 2px 10px 2px 0;"></textarea>
+          </div>
+          <div>
+            <button type="button" id="sendBtn" class="btn btn-outline-secondary">Ask</button>  
+          </div>
+        </div>
+        {% endif %}
+    </div>
+</body> 
+</html>

@@ -24,6 +24,7 @@ import textract
 import time
 import pymorphy3 # pip install pymorphy3 pip install -U pymorphy3-dicts-uk
 import locale
+import re
 
 import deepl
 
@@ -116,6 +117,10 @@ tokenizer = tiktoken.get_encoding("cl100k_base")
 
 dict_synonym_terms = {}
 dict_synonym_values = {}
+dict_synonym_values_adds = {}
+dict_synonym_values_sorted = {}
+
+dict_dont_change = {"слон":''}
 
 def recalc_dist(order_line, answer_line):
   answer_len = len(answer_line.split())
@@ -139,7 +144,7 @@ def recalc_dist(order_line, answer_line):
 
   return koeff 
 
-def recalc_dist2(order_line, answer_line, all=False):
+def recalc_dist2(order_line, answer_line, all=False, syn_qtys = {"nums": '0.123455432'}):
   answer_len = len(answer_line.split())
   koeffs = []
   koeff = 1.00
@@ -170,15 +175,23 @@ def recalc_dist2(order_line, answer_line, all=False):
        for key2, word_res in enumerate(answer_line_normal.split()):
           #if (word_res.find(word) >= 0):
 #         print(word, p.normal_form)
-          if ((word == word_res and len(word) >= 2 and not word.isnumeric()) or ((word == word_res and len(word) >= 2) and word.isnumeric())) and not word in prepos_dict.values():
+#          print('sys_qtys:', word, syn_qtys["nums"].split(','), str(word) in syn_qtys["nums"].split(','))
+          if ((word == word_res and len(word) >= 2 and not word.isnumeric()) or ((word == word_res and len(word) >= 2) and word.isnumeric()) ) and not word in prepos_dict.values():
 #              print(word, word_res, koeffs[key2], koeff, key2)
               koeff *= koeffs[key2]
               dist_hist.append({word : koeffs[key2]})
               word_found = True
 
+          
        if not word_found and not word.isnumeric() and not word in prepos_dict.values() and all == True:
             #print(word, answer_line_normal.split())
             not_found_words.append(word)
+
+  if  syn_qtys["nums"] != '0.123455432' and len(dist_hist) > 0:
+    for key2, word_res in enumerate(answer_line_normal.split()):
+         if word_res.isnumeric() and str(word_res) in syn_qtys["nums"].split(','):
+            koeff *= koeffs[key2]
+            dist_hist.append({word_res : koeffs[key2]})    
 
   return [koeff, dist_hist, not_found_words] 
 
@@ -272,22 +285,107 @@ def parse_units(str):
   return res.strip()
 
 def replace_with_synonym(order_line):
-  order_line_normal = ''
-  for key, word in enumerate(order_line.split()):
-    word = word.lower()
-    if word in dict_synonym_values.keys():
-        norm = word
-    else:
-        norm = morph.parse(word)[0].normal_form  
+    order_line_normal = ''
+    syn_arr = {}
 
+    #print('repl0:', order_line)
+    order_line_normal_ = order_line.lower()
+
+    #order_line_normal_ = ''
+  # normalize order line
+    #for key, word in enumerate(order_line.split()):
+    #    if not word in dict_dont_change.keys():
+    #        order_line_normal_ += morph.parse(word)[0].normal_form + ' '
+    #    else:
+    #        order_line_normal_ += word + ' '    
+
+  #  print('repl1:', order_line_normal_)   
+    #order_line_normal_ = order_line_normal_.strip()
+  # normalize key line
+    k = list(dict_synonym_values.items())
+    k.sort(key=lambda x:len(x[0]),reverse=True)
+    #print('K:', k)
+
+    #for i in k :
+    #    dict_synonym_values_sorted.update({i[0]:i[1]})
+    syn_arr.update({"nums": '0.123455432'})
+    #key_val_normal = ''   
+    for i in k:#key_val in dict_synonym_values_sorted.keys():
+        key_val = i[0]
+        key_val_normal = ''
+        #for key, word in enumerate(key_val.split()):
+        #    key_val_normal += morph.parse(word)[0].normal_form + ' '   
+        key_val_normal = key_val #key_val_normal.strip()
+        #print('repl4:', key_val_normal, order_line_normal_)
+        if  key_val_normal in order_line_normal_:
+            #print('replace:', order_line_normal_, key_val, key_val_normal, dict_synonym_values_sorted.get(key_val))
+            order_line_normal_ = order_line_normal_.replace(key_val_normal, i[1])#dict_synonym_values_sorted.get(key_val))
+            if dict_synonym_values_adds.get(key_val)!= None:
+                syn_arr.update({"nums": dict_synonym_values_adds.get(key_val)})
+
+    order_line = order_line_normal_  
+    #print('NORMAL:', order_line)
+
+    for key, word in enumerate(order_line.split()):
+        word = word.lower()
+        if word in dict_synonym_values.keys() or word in dict_dont_change.keys():
+            norm = word
+        else:
+            norm = morph.parse(word)[0].normal_form  
+
+        #print('NORM:', norm)
     #print('repl:', order_line, morph.parse(word)[0].normal_form, norm, dict_synonym_values.keys() )
+        #print('repl3:', word, dict_dont_change.keys())
+        if not norm in dict_synonym_values.keys() or word in dict_dont_change.keys():
+            order_line_normal+= word + ' ' #morph.parse(word)[0].normal_form + ' '   
+        else:
+            order_line_normal+= dict_synonym_values.get(norm) + ' '     
+            #syn_arr.append({dict_synonym_values.get(norm): dict_synonym_values_adds.get(norm)})
 
-    if not norm in dict_synonym_values.keys():
-        order_line_normal+= morph.parse(word)[0].normal_form + ' '   
-    else:
-        order_line_normal+= dict_synonym_values.get(norm) + ' '     
+    print('repl2:', order_line_normal, syn_arr)
+    return [order_line_normal.strip(), syn_arr]
 
-  return order_line_normal.strip()
+def parse_lines_synonym(Lines):
+    global dict_synonym_terms
+    global dict_synonym_values
+    global dict_synonym_values_adds
+    global dict_synonym_values_sorted
+    dict = []
+    i = 0
+    count = 0
+#    print(Lines)
+    for line in Lines.index:
+        #print('line', line)
+        #print(Lines[0][line], Lines[1][line], Lines[2][line], Lines[3][line])
+        #dict_synonym_termins = {}
+        #dict_synonym_values = {}
+        #re.sub(' +',' ',a)
+        vals = Lines[1][line].split(',')
+        for val in vals:
+            dict_synonym_terms.update({re.sub(' +',' ',Lines[0][line].lower().strip()) : re.sub(' +',' ', val.lower().strip()) })
+            dict_synonym_values.update({re.sub(' +',' ', val.lower().strip()) : re.sub(' +',' ',Lines[0][line].lower().strip()) })
+            #print(len(str(Lines[5][line])))
+            if str(Lines[5][line]) != 'nan':
+                dict_synonym_values_adds.update({re.sub(' +',' ', val.lower().strip()) : re.sub(' +',' ',str(Lines[5][line]))})
+
+  # resort dicts DESC
+#    for k in sorted(dict_synonym_values, key=len, reverse=True):
+#        dict_synonym_values_sorted[k] = dict_synonym_values[k]
+#    dict_synonym_values_sorted = sorted(dict_synonym_values, key=lambda l: len(l[0]), reverse=True)
+#    k = list(dict_synonym_values.items())
+#    k.sort(key=lambda x:len(x[0]),reverse=True)
+#    print('K:', k)
+
+#    for i in k :
+#        dict_synonym_values_sorted.update({i[0]:i[1]})
+    return
+
+class Suggestion:
+    def __init__(self, art, name, dist, dist_updated):
+        self.art = art
+        self.name = name
+        self.dist = dist
+        self.dist_updated = dist_updated
 
 @app.route("/")
 def index():
@@ -359,31 +457,6 @@ def dicts():
         #d = "[{'id': 100, 'name': 'Tree'}, {'id': 101, 'name': 'Bench'}, {'id': 103, 'name': 'Container'}, {'id': 104, 'name': 'Mobile'}]"
 
     return jsonify(d)
-
-class Suggestion:
-    def __init__(self, art, name, dist, dist_updated):
-        self.art = art
-        self.name = name
-        self.dist = dist
-        self.dist_updated = dist_updated
-
-def parse_lines_synonym(Lines):
-    global dict_synonym_terms
-    global dict_synonym_values
-    dict = []
-    i = 0
-    count = 0
-#    print(Lines)
-    for line in Lines.index:
-        #print('line', line)
-        #print(Lines[0][line], Lines[1][line], Lines[2][line], Lines[3][line])
-        #dict_synonym_termins = {}
-        #dict_synonym_values = {}
-        vals = Lines[1][line].split(',')
-        for val in vals:
-            dict_synonym_terms.update({Lines[0][line] : val})
-            dict_synonym_values.update({val : Lines[0][line]})
-    return
 
 def parse_lines(Lines, Type):
     dict = []
@@ -526,9 +599,12 @@ def parse_lines(Lines, Type):
             chat_answ  = ""
             if dist_sum/5 > 0.5 and not len(art_found) > 0: #len(dist_res[2]):
                 print(dist_sum, dist_sum/5, line_ua, dist_res[2])
-                new_line_ua = replace_with_synonym(line_ua)
+                syns = replace_with_synonym(line_ua)
 
-                print('synonym:', line_ua, new_line_ua)
+                new_line_ua = syns[0]
+                syn_qtys = syns[1]
+
+                print('synonym:', line_ua, new_line_ua, syn_qtys)
 
                 if new_line_ua == line_ua:                
                     chat_answ = ask_chat(question=line_ua)
@@ -545,7 +621,7 @@ def parse_lines(Lines, Type):
                     #    sug_ent_map.update({r[3]: r[6]})   
 
                         dist = recalc_dist(chat_answ, r[0])
-                        dist_res = recalc_dist2(chat_answ, r[0], True)
+                        dist_res = recalc_dist2(chat_answ, r[0], True, syn_qtys)
                         dist2 = dist_res[0]
                         if locale.atof(str(r[6]).replace(",", ".")) > 0:
                             dist2 = dist2 * SPEC_KOEF
@@ -1501,13 +1577,16 @@ df_spec = df[df["price_spec"] != 0].copy()
 
 
 if os.path.exists('./processed/synonyms/synonyms_sys.xlsx'):
+    df_file = pd.read_excel('./processed/synonyms/synonyms_sys.xlsx', header=None, skiprows=[0])
+    dict = parse_lines_synonym(df_file) 
     for filename in os.listdir('./processed/synonyms/'):
         #f = os.path.join(directory, filename)
         # checking if it is a file
         #if os.path.isfile(f):
-        print(filename)
-        df_file = pd.read_excel('./processed/synonyms/' + filename, header=None, skiprows=[0])
-        dict = parse_lines_synonym(df_file) 
+        if filename != 'synonyms_sys.xlsx':
+            print(filename)
+            df_file = pd.read_excel('./processed/synonyms/' + filename, header=None, skiprows=[0])
+            dict = parse_lines_synonym(df_file) 
 
 #    df_file = pd.read_excel('./processed/synonyms/synonyms_sys.xlsx', header=None, skiprows=[0])
 #    dict = parse_lines_synonym(df_file) 
@@ -1516,6 +1595,8 @@ if os.path.exists('./processed/synonyms/synonyms_sys.xlsx'):
 #dict_synonym_values = {}
 #print('syn_t:', dict_synonym_terms)
 #print('syn_v:', dict_synonym_values)
+#print('syn_v_a:', dict_synonym_values_adds)
+#print('syn_v_s:', dict_synonym_values_sorted)
 
 #df_spec["price_spec"] = df_spec["price_spec"].values[0]
 #df_spec["price_spec"] = df_spec["price_spec"].astype(str).replace(",", ".") #str(df_spec["price_spec"]).replace(",", ".")

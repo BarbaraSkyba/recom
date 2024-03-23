@@ -36,7 +36,7 @@ import ssl
 from math import dist
 from langdetect import detect
 #import chardet
-
+import datetime
 #import translators as ts
 #from googletrans import Translator
 
@@ -86,6 +86,7 @@ app = Flask(__name__)
 app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
 
 SPEC_KOEF = 0.5
+reInit = False
 
 CORS(app)
 
@@ -156,7 +157,8 @@ def recalc_dist2(order_line, answer_line, all=False, syn_qtys = {"nums": '0.1234
   #normalizing
   order_line = parse_units(order_line)
   answer_line = parse_units(answer_line)
-
+  
+#  print('parse', order_line, answer_line)
   for key, word in enumerate(order_line.split()):
     order_line_normal+= morph.parse(word)[0].normal_form + ' '
 
@@ -597,12 +599,15 @@ def parse_lines(Lines, Type):
                 #print(r)
 
             chat_answ  = ""
-            if dist_sum/5 > 0.5 and not len(art_found) > 0: #len(dist_res[2]):
+            syns = replace_with_synonym(line_ua)
+            new_line_ua = syns[0]
+            syn_qtys = syns[1]
+            if  (dist_sum/5 > 0.5 and not len(art_found) > 0) or line_ua != new_line_ua: #len(dist_res[2]):
                 print(dist_sum, dist_sum/5, line_ua, dist_res[2])
-                syns = replace_with_synonym(line_ua)
+                #syns = replace_with_synonym(line_ua)
 
-                new_line_ua = syns[0]
-                syn_qtys = syns[1]
+                #new_line_ua = syns[0]
+                #syn_qtys = syns[1]
 
                 print('synonym:', line_ua, new_line_ua, syn_qtys)
 
@@ -611,7 +616,11 @@ def parse_lines(Lines, Type):
                 else:
                     chat_answ = new_line_ua    
 
+                #print('chat_answ', chat_answ)
+                #chat_answ = "етикетка на аркуші"
                 response_data = answer_question(df, question=chat_answ, debug=False, max_len=1200, max_tokens=400)
+                #print(response_data)
+
                 for key, r in enumerate(response_data):
                     answ_cnt +=1
                     r = response_data[key]
@@ -774,6 +783,7 @@ def post():
 
     # Что можешь сказать о распределении работ?
     print('response')
+    request_data = request_data.lower().strip()
     response_data = answer_question(df, question=request_data, debug=False, max_len=1200, max_tokens=400)
     ret = []
     for r in response_data:
@@ -981,35 +991,83 @@ def crawl_ku(url):
    # record = (id, name, price, purchase_date)
     cursor.execute(sql)
     rs = cursor.fetchall()
-
     df_e = pd.read_excel(io=r"C:\Users\Paul\Downloads\ku_goods.xlsx")
-    #print(df_e.head(5))  # print first 5 rows of the dataframe
-    for i2 in range(len(df_e)):
+    """
 
-#        print(df_e.iloc[i2, 0], df_e.iloc[i2, 2])
+        #print(df_e.head(5))  # print first 5 rows of the dataframe
 
-        if (i > 0):
-            with open('text/'+local_domain+'/g'+ str(df_e.iloc[i2, 2]) + ".txt", "w", encoding="utf-8") as f: #  + '_' + row[2].replace("/", "_").replace(".", "_").replace(",", "_") +
+        for i2 in range(len(df_e)):
 
-                # Get the text from the URL using BeautifulSoup
-                text = ''
+            #print(df_e.iloc[i2, 0], df_e.iloc[i2, 2])
 
-                text = df_e.iloc[i2, 0]
+            if (i > 0):
+                with open('text/'+local_domain+'/g'+ str(df_e.iloc[i2, 2]) + ".txt", "w", encoding="utf-8") as f: #  + '_' + row[2].replace("/", "_").replace(".", "_").replace(",", "_") +
 
-                # If the crawler gets to a page that requires JavaScript, it will stop the crawl
-                if ("You need to enable JavaScript to run this app." in text):
-                    print("Unable to parse page " + url + " due to JavaScript being required")
-                
-                #print(text)
+                    # Get the text from the URL using BeautifulSoup
+                    text = ''
 
-                if df_e.iloc[i2, 0] not in seen:
-                    queue.append(df_e.iloc[i2, 0])
-                    seen.add(df_e.iloc[i2, 0])
+                    text = df_e.iloc[i2, 0]
 
-                # Otherwise, write the text to the file in the text directory
-                f.write(text)
+                    # If the crawler gets to a page that requires JavaScript, it will stop the crawl
+                    if ("You need to enable JavaScript to run this app." in text):
+                        print("Unable to parse page " + url + " due to JavaScript being required")
+                    
+                    #print(text)
 
-        i+=1
+                    if df_e.iloc[i2, 0] not in seen:
+                        queue.append(df_e.iloc[i2, 0])
+                        seen.add(df_e.iloc[i2, 0])
+
+                    # Otherwise, write the text to the file in the text directory
+                    f.write(text)
+
+            i+=1
+    """
+    """
+        for filename in os.listdir('text/'+local_domain):
+                if (i > 0):
+                    with open('text/'+local_domain+'/'+ filename, "w", encoding="utf-8") as f: 
+
+                        # Get the text from the URL using BeautifulSoup
+                        text = ''
+
+                        text = f.readline().lower()
+
+                        # If the crawler gets to a page that requires JavaScript, it will stop the crawl
+                        if ("You need to enable JavaScript to run this app." in text):
+                            print("Unable to parse page " + url + " due to JavaScript being required")
+                        
+                        #print(text)
+
+                        if df_e.iloc[i2, 0] not in seen:
+                            queue.append(df_e.iloc[i2, 0])
+                            seen.add(df_e.iloc[i2, 0])
+
+                        # Otherwise, write the text to the file in the text directory
+                        f.write(text)
+
+            i+=1
+    """
+    for index, row in df.iterrows():
+    #    print(index, df.at[index, 'embeddings']) # df.iloc[[index]]
+    #    arr = pd.DataFrame(row).T.text.apply(lambda x: openai.Embedding.create(input=x, engine='text-embedding-ada-002')['data'][0]['embedding'])
+    #    print('arr', arr.iloc[0])
+        i+= 1
+        with open('text/'+local_domain+'/'+ df.at[index, 'art'] + '.txt', "w", encoding="utf-8") as f: 
+            text = df.at[index, 'text']   
+
+            if df.at[index, 'art'] not in seen:
+                queue.append(df.at[index, 'art'])
+                seen.add(text) 
+
+            f.write(text)        
+        #print('test', df.at[index, 'embeddings'][0:9], len(df.at[index, 'embeddings']))
+
+        #f = os.path.join(directory, filename)
+        # checking if it is a file
+        #if os.path.isfile(f):
+        #    print(f)
+    print('Crawled')        
     return seen
 
     with open(r"C:\Users\Paul\Documents\ku_goods.csv", newline='', encoding="cp1251", errors='ignore') as csvfile:
@@ -1105,15 +1163,16 @@ def token():
 
     
     # Create a dataframe from the list of texts
-    df = pd.DataFrame(texts, columns = ['art', 'text'])
-
+    df2 = pd.DataFrame(texts, columns = ['art', 'text'])
+    df2["text_orig"] = df2['text']#.apply(lambda x: x.lower().replace('"', " ").strip())
+    df2["text"] = df2['text'].apply(lambda x: x.lower().replace('"', " ").strip())
      #df.head()
     # Set the text column to be the raw text with the newlines removed
     #print(df.text + ' !!! ' + df.fname.str.replace('g', '')) #df.fname.replace('g', ''))
     #print(df.text.str.replace('"', ''))
-    text = remove_newlines(df.text.str.replace('"', '').str.replace(' д/', ' для '))
+    text = remove_newlines(df2.text.str.replace('"', '').str.replace(' д/', ' для '))
     # text = text.str.replace(' д ', ' ').str.replace(' для ', ' ')
-    df['text'] = text # remove_newlines(df.text.str.replace('"', '').str.replace('/', ' ')) # + ' [' + df.fname.replace('g', '') + "]."; #df.fname + ". " + remove_newlines(df.text)
+    df2['text'] = text # remove_newlines(df.text.str.replace('"', '').str.replace('/', ' ')) # + ' [' + df.fname.replace('g', '') + "]."; #df.fname + ". " + remove_newlines(df.text)
     #df.to_csv('processed/scraped_ku.csv')
     
      #df.head()
@@ -1127,8 +1186,8 @@ def token():
     #df.columns = ['art', 'text']
     
     # Tokenize the text and save the number of tokens to a new column
-    df['n_tokens'] = df.text.apply(lambda x: len(tokenizer.encode(x)))
-    df.to_csv('processed/scraped_ku.csv')
+    df2['n_tokens'] = df.text.apply(lambda x: len(tokenizer.encode(x)))
+    df2.to_csv('processed/scraped_ku.csv')
 
     print(df.head())
 
@@ -1150,10 +1209,15 @@ def token():
             shortened.append( [ row[1]['text'], row[1]['art'] ])
 
 
-    df = pd.DataFrame(shortened, columns = ['text', 'art'])
+    #df = pd.DataFrame(shortened, columns = ['text', 'art'])
     df['n_tokens'] = df.text.apply(lambda x: len(tokenizer.encode(x)))
 
     #print(df.head())
+    print('Tokenized')
+    #df.to_pickle(path='processed/embeddings_ku.pkl', compression='gzip')
+    df = df.drop(columns=['qty_leaves', 'price_spec'])	
+    df.to_csv('processed/embeddings_ku.csv')
+    print('Saved tokenized')
     return render_template('index.html', page=1, web_data = urls, html_data = '', web_data_len = len(urls),  temp='', file = '')   
 
 def token_checknull(df):
@@ -1260,36 +1324,38 @@ if 'embeddings' not in df:
 def embedding():
     global df
     global np
+    global reInit
     #print(df.head())
     if 'embeddings' not in df:
         df['embeddings'] = ''
 
 
     i = 0
-    df = df[:20]
+    #df = df[:20]
     #print(df)
-
-    df['embeddings'] = np.array2string((np.full((1536), -1.0)), separator=",")
+    if reInit:
+        df['embeddings'] = np.array2string((np.full((1536), -100.0)), separator=",")
     #print()
     for index, row in df.iterrows():
     #    print(index, df.at[index, 'embeddings']) # df.iloc[[index]]
     #    arr = pd.DataFrame(row).T.text.apply(lambda x: openai.Embedding.create(input=x, engine='text-embedding-ada-002')['data'][0]['embedding'])
     #    print('arr', arr.iloc[0])
         i+= 1
-        if (i > 20):
-            break
+ #       if (i > 20):
+ #           break
 
-        print('test', df.at[index, 'embeddings'][0:9], len(df.at[index, 'embeddings']))
-        if (i < 10):
-            if ((len(df.at[index, 'embeddings'])==0) or (df.at[index, 'embeddings'][0:9] == '[-1.,-1.,')):
+#        print('test', df.at[index, 'embeddings'][0:9], len(df.at[index, 'embeddings']))
+        #if (i < 10):
+        if (True):
+            if ((df.at[index, 'embeddings'][0:13] == '[-100.,-100.,')): # (len(df.at[index, 'embeddings'])==0) or 
                 print('embedding', index)
                 try:
                     arr = pd.DataFrame(row).T.text.apply(lambda x: openai.Embedding.create(input=x, engine='text-embedding-ada-002')['data'][0]['embedding'])
-                    print('arr', type(arr.iloc[0]))
+                    print('arr', len(arr.iloc[0])) #type(arr.iloc[0]))
                     df.at[index, 'embeddings'] = '[' + ','.join(str(f) for f in arr.iloc[0]) + ']' #np.array2string(np.array(arr.iloc[0]), separator=",")
                 except Exception  as e:
                     print('error', e)
-                    df.at[index, 'embeddings'] = np.array2string((np.full((1536), -1.0)), separator=",") # [','.join([-1.0]*df.at[index, 'n_tokens'])] * 1 #",".join(np.full((df.at[index, 'n_tokens']), -1.0))    
+                    df.at[index, 'embeddings'] = np.array2string((np.full((1536), -100.0)), separator=",") # [','.join([-1.0]*df.at[index, 'n_tokens'])] * 1 #",".join(np.full((df.at[index, 'n_tokens']), -1.0))    
                 time.sleep(0.1) #time.sleep(1.1)
         else:
             df.at[index, 'embeddings'] = np.array2string((np.full((1536), -1.0)), separator=",") # [','.join([-1.0]*df.at[index, 'n_tokens'])] * 1 #",".join(np.full((df.at[index, 'n_tokens']), -1.0))    
@@ -1297,6 +1363,8 @@ def embedding():
     print(df)
 
     df.to_csv('processed/embeddings_ku.csv')
+    #df.to_pickle(path='processed/embeddings_ku.pkl', compression='gzip')
+
     df['embeddings'] = df['embeddings'].apply(eval).apply(np.array)
     return render_template('index.html', page=1, web_data = urls, html_data = '', web_data_len = len(urls),  temp='', file = '')   
 
@@ -1330,7 +1398,7 @@ def embedding_checknull(df):
                 #df.at[index, 'embeddings'] = df.at[index, 'embeddings'].apply(eval).apply(np.array)
             except Exception  as e:
                 print('error', e)
-                df.at[index, 'embeddings'] = np.array2string((np.full((1536), -1.0)), separator=",") # [','.join([-1.0]*df.at[index, 'n_tokens'])] * 1 #",".join(np.full((df.at[index, 'n_tokens']), -1.0))    
+                df.at[index, 'embeddings'] = np.array2string((np.full((1536), -100.0)), separator=",") # [','.join([-1.0]*df.at[index, 'n_tokens'])] * 1 #",".join(np.full((df.at[index, 'n_tokens']), -1.0))    
             time.sleep(0.1) #time.sleep(1.1)
 
     #df['embeddings'] = df['embeddings'].apply(eval).apply(np.array)
@@ -1350,8 +1418,10 @@ def create_context(question, df, max_len=2800, size="ada"):
     # Get the embeddings for the question
     q_embeddings = openai.Embedding.create(input=question, engine='text-embedding-ada-002')['data'][0]['embedding']
 
+    print(type(q_embeddings), type(df.iloc[0]['embeddings']), len(q_embeddings), len(df.iloc[0]['embeddings']))
     #print(['q_embeddings', q_embeddings])
     print(['Create_Context: ', question])
+    q_embeddings = np.array(q_embeddings)
 
     # Get the distances from the embeddings
     df['dist'] = df.apply(lambda row: Euclidean_Dist(q_embeddings, row['embeddings'], row['text']), axis=1)
@@ -1381,11 +1451,16 @@ def create_context(question, df, max_len=2800, size="ada"):
         #print(row)
         #print(i - 1, cur_len, row["text"])     
         # Else add it to the text that is being returned
-        returns.append(row["text"])
+        #returns.append(row["text_orig"])
+        #print(row["text_orig"])
+        if str(row["text_orig"]) != 'nan':
+            returns.append(str(row["text_orig"]))
+        else:   
+            returns.append(str(row["text"])) 
         retrows.append(row)
     #print('!!!', cur_len, len(returns[0]), returns)
     # Return the context
-    #print('retrows', retrows)
+    #print('retrows', returns)
     return ["\n\n###\n\n".join(returns), retrows]
 
 def ask_chat(    
@@ -1448,7 +1523,14 @@ def answer_question(
     #df.set_index("Name", inplace = True)
     for c in ret_context[1]:
             currenturl = ''
-            whole_context = whole_context + c['text']
+            #if c['text_orig'].isnumeric():
+            #print('NUMBER', c['text_orig'], c['art'], type(c['text_orig']))
+            if isinstance(c['text_orig'], str):
+                whole_context = whole_context + str(c['text_orig'])
+                #print('NUMBER', str(c['text_orig']) )
+            else:    
+                whole_context = whole_context + str(c['text']) 
+                #print('NUMBER2', str(c['text']) )
             ret.append([whole_context, currenturl, str(n_tokens), c['art'], c['dist'], c['qty_leaves'], c['price_spec']])
             whole_context = ''
             n_tokens = 0
@@ -1496,7 +1578,9 @@ def Euclidean_Dist(df1, df2, text):
     try:
         return np.linalg.norm(df1 - df2)
     except (ValueError, TypeError):
-        print([ValueError, TypeError, text])
+        pass
+        #print('EuclError')
+        #print([ValueError, TypeError, text])
     
 #Start reading
 i = 0
@@ -1504,56 +1588,91 @@ i = 0
 if os.path.exists('processed/scraped_ku.csv'):
     df = pd.read_csv('processed/scraped_ku.csv', index_col=0)
 
-if os.path.exists('processed/embeddings_ku.pkl'):
+print(datetime.datetime.now())
+force_checking = False
+if os.path.exists('processed/embeddings_ku.pkl') and not force_checking: # and not force_checking
+    print('Read pkl')
     df_merged = pd.read_pickle('processed/embeddings_ku.pkl', 'gzip')
     df = df_merged
     if 'n_tokens_y' in df and not 'n_tokens' in df:
         df['n_tokens'] = df['n_tokens_y'] 
+        df = df.drop(columns=['n_tokens_x', 'n_tokens_y'])
 
-    df = df.drop(columns=['n_tokens_x', 'n_tokens_y'])
     #print(df)
     #df.to_csv('processed/embeddings_ku2.csv')
 #    print(df)    
 #    df_merged['embeddings'] = df_merged['embeddings'].apply(eval).apply(np.array)
 else:	
+    # check existsing rows without vectors
+    print('Read csv')
     if os.path.exists('processed/embeddings_ku.csv'):
         df_embed = pd.read_csv('processed/embeddings_ku.csv', index_col=0)
-        df_merged = pd.merge(df, df_embed, on=['text', 'text'], how='left')
-        df = df_merged	
-        if 'n_tokens_y' in df and not 'n_tokens' in df:
-            df['n_tokens'] = df['n_tokens_y'] 
+        if (False):
+            df_embed["text_orig"] = df_embed['text']#.apply(lambda x: x.lower().replace('"', " ").strip())
+            df_embed["text"] = df_embed['text'].apply(lambda x: x.lower().replace('"', " ").strip())
+            df_merged = pd.merge(df, df_embed, on=['text', 'text'], how='left')
+            df = df_merged	
+            if 'n_tokens_y' in df and not 'n_tokens' in df:
+                df['n_tokens'] = df['n_tokens_y'] 
+                df = df.drop(columns=['n_tokens_x', 'n_tokens_y'])	
+        else:
+            df = df_embed        
 
-        df = df.drop(columns=['n_tokens_x', 'n_tokens_y'])	
         for index, row in df.iterrows():
-		#	print(row, row.embeddings, eval(row.embeddings).apply(np.array)[0])
-            if (eval(row.embeddings)[0] == -1.):
-                print('embedding_start', index)
-                #arr = openai.Embedding.create(input=df.loc[i2, "text"], engine='text-embedding-ada-002')['data'][0]['embedding']
-                arr = pd.DataFrame(row).T.text.apply(lambda x: openai.Embedding.create(input=x, engine='text-embedding-ada-002')['data'][0]['embedding'])
-                #print(arr)
-                df.at[index, 'embeddings'] = '[' + ','.join(str(f) for f in arr.iloc[0]) + ']' #np.array2string(np.array(arr.iloc[0]), separator=",") #arr.iloc[0]
-                #print(df.at[index, 'embeddings'])
-                i+=1
-        df['embeddings'] = df['embeddings'].apply(eval).apply(np.array)
+            if len(row) > 0 :
+                #print(index, df.at[index, 'text'])
+                #print(index, df.at[index, 'text'], str(df.at[index, 'embeddings'])[1:4]) # eval(df.at[index, 'embeddings'])[0] #, type(df.at[index, 'embeddings'])) # , eval(row.embeddings).apply(np.array)[0]
+                if (str(df.at[index, 'embeddings'])[1:6] == '-100.'):
+                    print('embedding_start', index, df.at[index, 'text'])
+                    #arr = openai.Embedding.create(input=df.loc[i2, "text"], engine='text-embedding-ada-002')['data'][0]['embedding']
+                    arr = pd.DataFrame(row).T.text.apply(lambda x: openai.Embedding.create(input=x, engine='text-embedding-ada-002')['data'][0]['embedding'])
+                    #q_embeddings = openai.Embedding.create(input=question, engine='text-embedding-ada-002')['data'][0]['embedding']
+                    #print(arr)
+                    df.at[index, 'embeddings'] = '[' + ','.join(str(f) for f in arr.iloc[0]) + ']' #np.array2string(np.array(arr.iloc[0]), separator=",") #arr.iloc[0]
+                    df.at[index, 'embeddings'] = eval(df.at[index, 'embeddings'])
+                    #print(df.at[index, 'embeddings'])
+                    i+=1
+                else:
+                    #df.at[index, 'embeddings'] = eval(df.at[index, 'embeddings']) #df['embeddings'].apply(eval)
+                    pass
+                    #df.at[index, 'embeddings'] = np.array(df.at[index, 'embeddings'])#.apply(eval).apply(np.array)
+                    #df['embeddings'] = df['embeddings'].apply(eval).apply(np.array)
+
+        df['embeddings'] = df['embeddings'].apply(eval)
+
         if (i > 0):
             df.to_csv('processed/embeddings_ku.csv') 
+
 #print(df)
 #print(['null', len(df[df.embeddings[0] == -1])])
+print(datetime.datetime.now())
 
+replace_pkl = False
+
+# check or add lowercase names
+if not 'text_orig' in df and False:
+    df["text_orig"] = df['text']#.apply(lambda x: x.lower().replace('"', " ").strip())
+    df["text"] = df['text'].apply(lambda x: x.lower().replace('"', " ").strip())
+    replace_pkl = True
+    df.to_csv('processed/embeddings_ku.csv') 
+
+
+#df = df[['art', 'text','text_orig','n_tokens','embeddings']] 
+#df.to_csv('processed/embeddings_ku.csv')
+
+print(df)   
+#replace_pkl = True
 # try to save
-if not os.path.exists('processed/embeddings_ku.pkl'):
+if not os.path.exists('processed/embeddings_ku.pkl') or replace_pkl:
     df.to_pickle(path='processed/embeddings_ku.pkl', compression='gzip')
 
 #get leaves
 # 
 df_leaves = pd.DataFrame()
-df_leaves = pd.DataFrame()
 if os.path.exists('processed/leaves/leaves_ku.csv'):
     df_leaves = pd.read_csv('processed/leaves/leaves_ku.csv', sep=';', index_col=False)
     df_leaves['art_leaves'] = 'g' + ('000000' + df_leaves['art_leaves'].astype(str)).str[-6:]
 
-#print(df_leaves)
-#print(df)
 df = pd.merge(df, df_leaves, left_on='art', right_on='art_leaves', how='left')#df.merge(df_leaves, left_on='art', right_on='art_leaves', validate='one_to_one')#pd.merge(df, df_leaves, on=['art', 'art_leaves'], how='left')#df.merge(df_leaves, on=['art_leaves', 'art'], how='left')
 df = df.drop(columns=['name_leaves', 'code_leaves', 'art_leaves'])	
 
@@ -1594,7 +1713,7 @@ if os.path.exists('./processed/synonyms/synonyms_sys.xlsx'):
 #dict_synonym_terms = {}
 #dict_synonym_values = {}
 #print('syn_t:', dict_synonym_terms)
-#print('syn_v:', dict_synonym_values)
+print('syn_v:', dict_synonym_values)
 #print('syn_v_a:', dict_synonym_values_adds)
 #print('syn_v_s:', dict_synonym_values_sorted)
 

@@ -117,7 +117,7 @@
             </li>
             <li><a href="/chat">Chat</a></li>    
             <li><a href="/upload">Upload</a></li>    
-            <li><a href="/synonym">Synonym</a></li>    
+            <li><a href="/synonym">Synonym</a></li>     
             <li><a href="/slang">Slang</a></li>  
           </ul>
           <ul class="nav navbar-nav navbar-right">
@@ -127,9 +127,9 @@
         </div>
     </nav>
     <div class="container" style="margin:100px">
-        <h3>Замовлення</h3>
+        <h3>Сленг</h3>
         {% if web_data %}
-          <form action = "/upload" method = "post" enctype="multipart/form-data">   
+          <form action = "/slang" method = "post" enctype="multipart/form-data">   
             <div style="display: flex;">
               <input type="file" name="file" />   
               <input type = "submit" value="Upload">
@@ -137,9 +137,9 @@
           </form> 
         {% endif %}
         {% if file %}
-        <form action = "/upload" method = "post" enctype="multipart/form-data">   
+        <form action = "/slang" method = "post" enctype="multipart/form-data">   
           <div style="display: flex; font-weight: bold; margin-top: 10px;">
-            <p style="color: #74d193">File uploaded successfully</p> 
+            <p style="color: #74d193">File of order uploaded successfully</p> 
             <p style="margin-left: 20px; color: #7474d1">File Name: {{file.filename}}</p> 
           </div>   
         </form> 

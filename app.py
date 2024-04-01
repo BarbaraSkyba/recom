@@ -619,7 +619,7 @@ def parse_lines(Lines, Type, isOrder = True):
                         break               
 
             if isOrder:
-                response_data = answer_question(df, question=line_ua, debug=False, max_len=1200, max_tokens=400)
+                response_data = answer_question(df, question=new_line_ua, debug=False, max_len=1200, max_tokens=400)
                 dist_sum = 0
                 for key, r in enumerate(response_data):
                     answ_cnt +=1

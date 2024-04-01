@@ -38,7 +38,7 @@
                 console.log('btn', $$tempUserId, $('#question').val())
                 let msg = JSON.stringify({user: $$tempUserId, 
                                           msg: $('#question').val() })
-                myurl = "http://127.0.0.1:5000/post"
+                myurl = window.location.href.replace('/chat2','/post2')//"http://re.com:5000/post"
                 //msg = { name: "John", time: "2pm" }
                 /*
                 $.post("http://127.0.0.1:5000/post", msg, function(result) {
@@ -76,7 +76,7 @@
                 $('#question').val('')
             })
             function submitOnEnter(event) {
-                  console.log('dddd')
+                  //console.log('dddd')
                   if (event.which === 13) {
                       if (!event.repeat) {
                         /*
@@ -115,11 +115,11 @@
                     <li><a href="/embedding">Embedding</a></li>
                 </ul>
             </li>
-            <li><a href="/chat">Chat</a></li>   
-            <li><a href="/chat2">Chat2</a></li>  
-            <li><a href="/upload">Order</a></li>    
+            <li><a href="/chat">Chat</a></li> 
+            <li><a href="/chat2">Chat2</a></li> 
+            <li><a href="/upload">Order</a></li>     
             <li><a href="/synonym">Synonym</a></li>     
-            <li><a href="/slang">Slang</a></li>  
+            <li><a href="/slang">Slang</a></li>   
           </ul>
           <ul class="nav navbar-nav navbar-right">
             <li><a href="#"><span class="glyphicon glyphicon-user"></span> Sign Up</a></li>
@@ -127,24 +127,23 @@
           </ul>
         </div>
     </nav>
-    <div class="container" style="margin:100px">
-        <h3>Сленг</h3>
+    <div class="container" style="margin-top:50px">
         {% if web_data %}
-          <form action = "/slang" method = "post" enctype="multipart/form-data">   
-            <div style="display: flex;">
-              <input type="file" name="file" />   
-              <input type = "submit" value="Upload">
-            </div>   
-          </form> 
+        <div class="with_border">
+            <div class="block_title" style="font-weight: bold; margin-bottom: 10px">Chat:</div>
+            <div class="block_title" id="messages" style="width: 100%; height: calc(90vh - 20px); overflow: auto;"></div>
+        </div>
+        <div style="position: absolute; background-color: rgb(186, 186, 252); 
+                                  height: 60px; width: 100%; display: flex; align-items: center; 
+                                  justify-content: space-between; left: 0; bottom: 0; padding: 5px;">
+          <div style="width: 100%;">
+            <textarea type="text" rows="2" id="question" placeholder="Question" style="width: 95%; margin: 2px 10px 2px 0;"></textarea>
+          </div>
+          <div>
+            <button type="button" id="sendBtn" class="btn btn-outline-secondary">Ask</button>  
+          </div>
+        </div>
         {% endif %}
-        {% if file %}
-        <form action = "/slang" method = "post" enctype="multipart/form-data">   
-          <div style="display: flex; font-weight: bold; margin-top: 10px;">
-            <p style="color: #74d193">File of order uploaded successfully</p> 
-            <p style="margin-left: 20px; color: #7474d1">File Name: {{file.filename}}</p> 
-          </div>   
-        </form> 
-      {% endif %}
     </div>
 </body> 
 </html>

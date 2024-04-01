@@ -37,6 +37,10 @@ from math import dist
 from langdetect import detect
 #import chardet
 import datetime
+
+from sentence_transformers import SentenceTransformer, util
+
+model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')#SentenceTransformer('paraphrase-multilingual-mpnet-base-v2')#SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')  # multi-language model
 #import translators as ts
 #from googletrans import Translator
 
@@ -86,6 +90,7 @@ app = Flask(__name__)
 app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
 
 SPEC_KOEF = 0.5
+LEAVES_KOEF = 0.8
 reInit = False
 
 CORS(app)
@@ -121,7 +126,7 @@ dict_synonym_values = {}
 dict_synonym_values_adds = {}
 dict_synonym_values_sorted = {}
 
-dict_dont_change = {"слон":''}
+dict_dont_change = {}#{"слон":''} # , "пластикові": '', "пластикові": '', "пластикова": '', "пластиковий": ''
 
 def recalc_dist(order_line, answer_line):
   answer_len = len(answer_line.split())
@@ -158,12 +163,16 @@ def recalc_dist2(order_line, answer_line, all=False, syn_qtys = {"nums": '0.1234
   order_line = parse_units(order_line)
   answer_line = parse_units(answer_line)
   
+  #print('NORMAL0', order_line_normal, answer_line_normal)
 #  print('parse', order_line, answer_line)
   for key, word in enumerate(order_line.split()):
     order_line_normal+= morph.parse(word)[0].normal_form + ' '
 
   for key, word in enumerate(answer_line.split()):
     answer_line_normal+= morph.parse(word)[0].normal_form + ' '
+
+  order_line_normal = replace_with_synonym(order_line_normal)[0]
+  answer_line_normal = replace_with_synonym(answer_line_normal)[0]
 
   for key, word in enumerate(answer_line.split()):
     if not word in prepos_dict.values():
@@ -172,6 +181,8 @@ def recalc_dist2(order_line, answer_line, all=False, syn_qtys = {"nums": '0.1234
     else:
         koeffs.append(1)
 
+
+  #print('NORMAL', order_line_normal, answer_line_normal)
   for key, word in enumerate(order_line_normal.split()):
        word_found = False
        for key2, word_res in enumerate(answer_line_normal.split()):
@@ -286,26 +297,16 @@ def parse_units(str):
     res +=sub_word + ' '
   return res.strip()
 
-def replace_with_synonym(order_line):
+def replace_with_synonym(order_line, showPrint = False):
     order_line_normal = ''
     syn_arr = {}
 
-    #print('repl0:', order_line)
     order_line_normal_ = order_line.lower()
 
-    #order_line_normal_ = ''
-  # normalize order line
-    #for key, word in enumerate(order_line.split()):
-    #    if not word in dict_dont_change.keys():
-    #        order_line_normal_ += morph.parse(word)[0].normal_form + ' '
-    #    else:
-    #        order_line_normal_ += word + ' '    
-
-  #  print('repl1:', order_line_normal_)   
-    #order_line_normal_ = order_line_normal_.strip()
   # normalize key line
     k = list(dict_synonym_values.items())
     k.sort(key=lambda x:len(x[0]),reverse=True)
+  
     #print('K:', k)
 
     #for i in k :
@@ -321,21 +322,33 @@ def replace_with_synonym(order_line):
         #print('repl4:', key_val_normal, order_line_normal_)
         if  key_val_normal in order_line_normal_:
             #print('replace:', order_line_normal_, key_val, key_val_normal, dict_synonym_values_sorted.get(key_val))
-            order_line_normal_ = order_line_normal_.replace(key_val_normal, i[1])#dict_synonym_values_sorted.get(key_val))
-            if dict_synonym_values_adds.get(key_val)!= None:
-                syn_arr.update({"nums": dict_synonym_values_adds.get(key_val)})
+            for k, l in enumerate(order_line_normal_.strip()):
+                if showPrint:
+                    print(l, key_val_normal[0], order_line_normal_[k:len(key_val_normal)], key_val_normal)
+                if l == key_val_normal[0] and order_line_normal_[k:len(key_val_normal)] == key_val_normal:
+                    order_line_normal_ = order_line_normal_[0:k] + i[1] + order_line_normal_[k+len(key_val_normal):]
+            """
+            for word in order_line_normal_.strip().split():
+                if word == key_val_normal:
+                    order_line_normal_ = order_line_normal_.replace(key_val_normal, i[1])#dict_synonym_values_sorted.get(key_val))
+                    if dict_synonym_values_adds.get(key_val)!= None:
+                        syn_arr.update({"nums": dict_synonym_values_adds.get(key_val)})
+                else:
+                    order_line_normal_ = order_line_normal_  
+            """
 
     order_line = order_line_normal_  
     #print('NORMAL:', order_line)
 
     for key, word in enumerate(order_line.split()):
-        word = word.lower()
+        word = word.lower().strip()
+            
         if word in dict_synonym_values.keys() or word in dict_dont_change.keys():
             norm = word
         else:
             norm = morph.parse(word)[0].normal_form  
 
-        #print('NORM:', norm)
+    #    print('NORM:', word, norm)
     #print('repl:', order_line, morph.parse(word)[0].normal_form, norm, dict_synonym_values.keys() )
         #print('repl3:', word, dict_dont_change.keys())
         if not norm in dict_synonym_values.keys() or word in dict_dont_change.keys():
@@ -344,7 +357,7 @@ def replace_with_synonym(order_line):
             order_line_normal+= dict_synonym_values.get(norm) + ' '     
             #syn_arr.append({dict_synonym_values.get(norm): dict_synonym_values_adds.get(norm)})
 
-    print('repl2:', order_line_normal, syn_arr)
+    #print('repl2:', order_line_normal, syn_arr)
     return [order_line_normal.strip(), syn_arr]
 
 def parse_lines_synonym(Lines):
@@ -398,6 +411,10 @@ def index():
 @app.route("/chat")
 def chat():
    return render_template('chat.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = '')   
+
+@app.route("/chat2")
+def chat2():
+   return render_template('chat2.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = '')   
 
 @app.route("/upload")
 def  upload():
@@ -479,6 +496,9 @@ def parse_lines(Lines, Type, isOrder = True):
 
     for line in Lines:
         #print("Line{}: {}".format(count, line.strip()))
+        if line[:2] == '##':
+            continue
+
         line = line.replace('\n', '')
         print(line)
         ret = []
@@ -486,6 +506,7 @@ def parse_lines(Lines, Type, isOrder = True):
         ret_qty = []
         ret_woqty = []
         ret_syn = []
+        ret_all = []
 
         ret_spec_arr = []
         ret_qty_arr = []
@@ -517,8 +538,16 @@ def parse_lines(Lines, Type, isOrder = True):
             else:
                 line_ua = line
 
+            chat_answ  = ""
+            #print('PRINT:', line_ua)
+            syns = replace_with_synonym(line_ua, False)
+
+            new_line_ua = syns[0]
+            #print('PRINT2:', new_line_ua, syns)
+            syn_qtys = syns[1]
+            
             if isOrder:
-                response_data = answer_question(df_spec, question=line_ua, debug=False, max_len=1200, max_tokens=400, with_leaves = True)
+                response_data = answer_question(df_spec, question=new_line_ua, debug=False, max_len=1200, max_tokens=400, with_leaves = True)
                 for key, r in enumerate(response_data):
                     answ_cnt +=1
                     r = response_data[key]
@@ -534,11 +563,15 @@ def parse_lines(Lines, Type, isOrder = True):
                         if locale.atof(str(r[6]).replace(",", ".")) > 0:
                             if len(dist_res[1]): # only if other word hear 
                                 dist2 = dist2 * SPEC_KOEF
-                                dist_res[1].append({"SPEC": 0.5})
+                                dist_res[1].append({"SPEC": SPEC_KOEF})
+                        if locale.atof(str(r[5]).replace(",", ".")) > 0:
+                            if len(dist_res[1]): # only if other word hear 
+                                dist2 = dist2 * LEAVES_KOEF
+                                dist_res[1].append({"LEAVES": LEAVES_KOEF})            
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
-                        ret_spec.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] - dist, "dist_updated2": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_spec'})
+                        ret_spec.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_spec'}) #"dist_updated": r[4] - dist, 
                 
-                ret_spec = sorted(ret_spec, key=lambda d: d['dist_updated2'])
+                ret_spec = sorted(ret_spec, key=lambda d: d['dist_updated'])
                 cnt = 0
                 for key, r in enumerate(ret_spec):
                     if not r.get("art") in sug_ent_map:
@@ -546,11 +579,12 @@ def parse_lines(Lines, Type, isOrder = True):
                         cnt+=1 
                         ret.append(r)
                         ret_spec_arr.append(r)
-                    if cnt > 4:
+                        ret_all.append(r)
+                    if cnt > 3:
                         break                   
 
             if isOrder:
-                response_data = answer_question(df_leaves, question=line_ua, debug=False, max_len=1200, max_tokens=400, with_leaves = True)
+                response_data = answer_question(df_leaves, question=new_line_ua, debug=False, max_len=1200, max_tokens=400, with_leaves = True)
                 for key, r in enumerate(response_data):
                     answ_cnt +=1
                     r = response_data[key]
@@ -565,11 +599,14 @@ def parse_lines(Lines, Type, isOrder = True):
                         #print(locale.atof(str(r[6]).replace(",", ".")))
                         if locale.atof(str(r[6]).replace(",", ".")) > 0:
                             dist2 = dist2 * SPEC_KOEF
-                            dist_res[1].append({"SPEC": 0.5})
+                            dist_res[1].append({"SPEC": SPEC_KOEF})
+                        if locale.atof(str(r[5]).replace(",", ".")) > 0:
+                            dist2 = dist2 * LEAVES_KOEF
+                            dist_res[1].append({"LEAVES": LEAVES_KOEF})      
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
-                        ret_qty.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] - dist, "dist_updated2": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_leaves'})
+                        ret_qty.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_leaves'}) #  "dist_updated": r[4] - dist, 
                 
-                ret_qty = sorted(ret_qty, key=lambda d: d['dist_updated2'])
+                ret_qty = sorted(ret_qty, key=lambda d: d['dist_updated'])
                 cnt = 0
                 for key, r in enumerate(ret_qty):
                     if not r.get("art") in sug_ent_map:
@@ -577,7 +614,8 @@ def parse_lines(Lines, Type, isOrder = True):
                         cnt+=1 
                         ret.append(r)
                         ret_qty_arr.append(r)
-                    if cnt > 14:
+                        ret_all.append(r)                        
+                    if cnt > 3:
                         break               
 
             if isOrder:
@@ -597,13 +635,16 @@ def parse_lines(Lines, Type, isOrder = True):
                         dist2 = dist_res[0]
                         if locale.atof(str(r[6]).replace(",", ".")) > 0:
                             dist2 = dist2 * SPEC_KOEF
-                            dist_res[1].append({"SPEC": 0.5})
+                            dist_res[1].append({"SPEC": SPEC_KOEF})
+                        if locale.atof(str(r[5]).replace(",", ".")) > 0:
+                            dist2 = dist2 * LEAVES_KOEF
+                            dist_res[1].append({"LEAVES": LEAVES_KOEF})  
                         #print(locale.atof(str(r[6]).replace(",", ".")))
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
-                        ret_woqty.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] - dist, "dist_updated2": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_all'})
+                        ret_woqty.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_all'}) # "dist_updated": r[4] - dist, 
                     #ret.append(sug)
 
-                ret_woqty = sorted(ret_woqty, key=lambda d: d['dist_updated2']) 
+                ret_woqty = sorted(ret_woqty, key=lambda d: d['dist_updated']) 
                 #print(ret_woqty)
                 cnt = 0
                 for key, r in enumerate(ret_woqty):
@@ -613,26 +654,24 @@ def parse_lines(Lines, Type, isOrder = True):
                         dist_sum += r.get("dist")
                         ret.append(r)
                         ret_woqty_arr.append(r)
+                        ret_all.append(r)                        
                     if cnt > 4:
                         break
 
                 #print(r)
 
-            chat_answ  = ""
-            syns = replace_with_synonym(line_ua)
-            new_line_ua = syns[0]
-            syn_qtys = syns[1]
-            if  (dist_sum/5 > 0.5 and not len(art_found) > 0 and isOrder) or (line_ua != new_line_ua and isOrder): #len(dist_res[2]):
+
+            if  ((dist_sum/5 > 0.5 and not len(art_found) > 0 and isOrder) or (line_ua != new_line_ua and isOrder)) and False: #len(dist_res[2]):
                 print(dist_sum, dist_sum/5, line_ua, dist_res[2])
                 #syns = replace_with_synonym(line_ua)
 
                 #new_line_ua = syns[0]
                 #syn_qtys = syns[1]
 
-                print('synonym:', line_ua, new_line_ua, syn_qtys)
+                #print('synonym:', line_ua, new_line_ua, syn_qtys)
 
                 if new_line_ua == line_ua:                
-                    chat_answ = ask_chat(question=line_ua)
+                    chat_answ = new_line_ua#ask_chat(question=line_ua)
                 else:
                     chat_answ = new_line_ua    
 
@@ -672,7 +711,7 @@ def parse_lines(Lines, Type, isOrder = True):
 
                     #print(r)
 
-                val = {"row" : count, "orig": line, "orig_ua": line_ua, "name_syn": chat_answ, "lng": orig_lang.upper(),   "suggestions:": { "spec": ret_spec_arr, "leaves" : ret_qty_arr, "all" : ret_woqty_arr, "syn": ret_syn_arr } }
+                val = {"row" : count, "orig": line, "orig_ua": line_ua, "name_syn": chat_answ, "lng": orig_lang.upper(),   "suggestions": { "spec": ret_spec_arr, "leaves" : ret_qty_arr, "all" : ret_woqty_arr, "syn": ret_syn_arr } }
                 dict.append(val)                
                 print("Синоним для ", line_ua, ": ", chat_answ)
             else:
@@ -681,41 +720,45 @@ def parse_lines(Lines, Type, isOrder = True):
 
                     #print('chat_answ', chat_answ)
                     #chat_answ = "етикетка на аркуші"
-                    new_line_ua = parse_units(new_line_ua.lower().replace(',', ' ').replace('(', ' ').replace(')', ' ').strip())
+                    new_line_ua = parse_units(new_line_ua.lower().replace(',', ' ').replace('(', ' ').replace(')', ' ').replace('"', ' ').strip())
                     for word in new_line_ua.strip().split():
                         word_met = 0
                         if not word in prepos_dict.keys() and not word.isnumeric() and len(word) > 1:
-                            response_data = answer_question(df, question=word, debug=False, max_len=1200, max_tokens=400)
-                            for key, r in enumerate(response_data):
-                                answ_cnt +=1
-                                r = response_data[key]
-                                answ_line_normal = ''
-                                 #normalizing
-                                #word = word.replace(',', ' ').replace('(', ' ').replace(')', ' ').strip()
-                                answ_line = r[0]
-                                answ_line = parse_units(answ_line.lower().replace(',', ' ').replace('(', ' ').replace(')', ' ').strip())
-                                
-                                #  print('parse', order_line, answer_line)
-                                for key, word2 in enumerate(answ_line.split()):
-                                    answ_line_normal+= morph.parse(word2)[0].normal_form + ' '
+                            if not df['text'].str.contains(word, regex=False).any():
+                                response_data = answer_question(df, question=word, debug=False, max_len=1200, max_tokens=400)
+                                for key, r in enumerate(response_data):
+                                    answ_cnt +=1
+                                    r = response_data[key]
+                                    answ_line_normal = ''
+                                    #normalizing
+                                    #word = word.replace(',', ' ').replace('(', ' ').replace(')', ' ').strip()
+                                    answ_line = r[0]
+                                    answ_line = parse_units(answ_line.lower().replace(',', ' ').replace('(', ' ').replace(')', ' ').replace('"', ' ').strip())
+                                    
+                                    #  print('parse', order_line, answer_line)
+                                    for key, word2 in enumerate(answ_line.split()):
+                                        answ_line_normal+= morph.parse(word2)[0].normal_form + ' '
 
-                                #print(word, r[0])
-                                word = morph.parse(word)[0].normal_form
-                                if word in answ_line.strip().lower():
-                                    word_met +=1
+                                    #print(word, r[0])
+                                    word = morph.parse(word)[0].normal_form
+                                    if word in answ_line.strip().lower():
+                                        word_met +=1
 
-                            if word_met != 0:
-                                pass
-                                #ret_syn.append({"word": word, "dist_updated2": 1 / word_met, "count": word_met})
+                                if word_met != 0:
+                                    pass
+                                    #ret_syn.append({"word": word, "dist_updated2": 1 / word_met, "count": word_met})
+                                else:
+                                    ret_syn.append({"word": word, "dist_updated": 1000, "count": 0, "isSLANG": True})  
                             else:
-                                ret_syn.append({"word": word, "dist_updated2": 1000, "count": 0, "isSLANG": True})     
+                                 #ret_syn.append({"word": word, "dist_updated2": 0.001, "count": 1, "isSLANG": 'Found'})  
+                                 pass          
                         else:
                                 pass
                                 #ret_syn.append({"word": word, "dist_updated2": 1 / 100 - key, "count": 100, "is_prep": True,  "found": 'slangs'})
-                        print('WORD', word)
+                        #print('WORD', word)
  #                       print(ret_syn)
 
-                    ret_syn = sorted(ret_syn, key=lambda d: d['dist_updated2']) 
+                    ret_syn = sorted(ret_syn, key=lambda d: d['dist_updated']) 
                     #print(ret_woqty)
                     cnt = 0
                     for key, r in enumerate(ret_syn):
@@ -725,11 +768,12 @@ def parse_lines(Lines, Type, isOrder = True):
 
                         #print(r)
 
-                    val = {"row" : count, "orig": line, "orig_ua": line_ua, "name_syn": chat_answ, "lng": orig_lang.upper(),   "suggestions:": { "spec": ret_spec_arr, "leaves" : ret_qty_arr, "all" : ret_woqty_arr, "syn": ret_syn_arr } }
+                    val = {"row" : count, "orig": line, "orig_ua": line_ua, "name_syn": chat_answ, "lng": orig_lang.upper(),   "suggestions": { "spec": ret_spec_arr, "leaves" : ret_qty_arr, "all" : ret_woqty_arr, "syn": ret_syn_arr } }
                     dict.append(val)                
                     print("сленги для ", line_ua, ": ", chat_answ)                    
                 else:
-                    val = {"row" : count, "orig": line, "orig_ua": line_ua, "lng": orig_lang.upper(),   "suggestions:": { "spec": ret_spec_arr, "leaves" : ret_qty_arr, "all" : ret_woqty_arr, "syn": ret_syn_arr }}
+                    ret_all = sorted(ret_all, key=lambda d: d['dist_updated']) 
+                    val = {"row" : count, "orig": line, "orig_ua": new_line_ua, "lng": orig_lang.upper(),   "suggestions": ret_all} #"suggestions": { "spec": ret_spec_arr, "leaves" : ret_qty_arr, "all" : ret_woqty_arr, "syn": ret_syn_arr }}
                     dict.append(val)
                     print(line_ua, dist_sum/5)
 
@@ -816,8 +860,27 @@ def  uploadfile(isOrder = True):
             ts = str(ts) + "_xls"
 
     #print(dict)
-    with open('./uploaded/' + ts+".json", "w", encoding="utf-8") as outfile: 
-        json.dump(dict, outfile, ensure_ascii=False)
+
+    if isOrder: 
+        with open('./uploaded/' + ts+".json", "w", encoding="utf-8") as outfile:
+            json.dump(dict, outfile, ensure_ascii=False)
+        outfile.close()    
+    else:
+        #print('dict:', dict)
+        write_rows = []
+        write_rows.append(["word", "orig", "row"])
+        for obj in dict:
+            #print('obj0', obj)
+            obj = eval(str(obj))#json.loads(str(obj)) # 
+            if len(obj.get("suggestions").get('syn')): 
+                for word in obj.get("suggestions").get("syn"):
+                    print ("word:", word, word.get("word"), obj.get("orig"), str(obj.get("row")))
+                    write_rows.append([word.get("word"), obj.get("orig"), obj.get("row")])
+                    #writer.writerow(word.get("word") + ',' + obj.get("orig") + ',' + str(obj.get("row")))
+        #print('write_rows', write_rows)            
+        with open('./uploaded/' + ts+'.csv', "w", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerows(write_rows) 
 
     #print('is_file', is_file, ts)
 
@@ -827,9 +890,17 @@ def  uploadfile(isOrder = True):
         
         #return send_file('./uploaded/1711314090.482361_txt.json', as_attachment=True)
         try: 
-            return send_file('./uploaded/' + ts+".json", as_attachment=True)  
+            if isOrder:
+                return send_file('./uploaded/' + ts+".json", as_attachment=True)  
+            else:
+                return send_file('./uploaded/' + ts+".csv", as_attachment=True) 
         except Error:
             print(Error)
+
+        if isOrder:
+            return render_template('upload.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = f)  
+        else:
+            return render_template('slang.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = f)
     else: 
         return render_template('upload.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = f)   
 
@@ -868,6 +939,23 @@ def post():
     print('response')
     request_data = request_data.lower().strip()
     response_data = answer_question(df, question=request_data, debug=False, max_len=1200, max_tokens=400)
+    ret = []
+    for r in response_data:
+        ret.append({"a": r[0], "u": r[1], "t": r[2]})
+    #print(response_data)
+    #return jsonify({"a": response_data[0], "u": response_data[1]})
+    return jsonify(ret)
+
+@app.route("/post2", methods=['POST'])
+def post2():
+    global df
+    #request_data = request.get_json();
+    request_data = json.loads(request.json)['msg']
+
+    # Что можешь сказать о распределении работ?
+    print('response2')
+    request_data = request_data.lower().strip()
+    response_data = answer_question(df, question=request_data, debug=False, max_len=1200, max_tokens=400, isNewEmbed=True)
     ret = []
     for r in response_data:
         ret.append({"a": r[0], "u": r[1], "t": r[2]})
@@ -1493,25 +1581,50 @@ def embedding_checknull(df):
 #df=pd.read_csv('processed/embeddings.csv', index_col=0)
 #df['embeddings'] = df['embeddings'].apply(eval).apply(np.array)
 
-def create_context(question, df, max_len=2800, size="ada"):
+def create_context(question, df, max_len=2800, size="ada", isNewEmbed=False):
     """
     Create a context for a question by finding the most similar context from the dataframe
     """
 
     # Get the embeddings for the question
-    q_embeddings = openai.Embedding.create(input=question, engine='text-embedding-ada-002')['data'][0]['embedding']
+    if not isNewEmbed:
+        q_embeddings = openai.Embedding.create(input=question, engine='text-embedding-ada-002')['data'][0]['embedding']
+    else:
+        q_embeddings = model.encode(question, convert_to_tensor=False) #openai.Embedding.create(input=question, engine='text-embedding-ada-002')['data'][0]['embedding']  
+        test_embded = model.encode('кнопка-цвях 36 шт кольорова economix e41102', convert_to_tensor=False)
+        test_embded2 = model.encode('добриво органічне концентрат гумінових кислот для кімнатних квітучих рослин 500мл', convert_to_tensor=False)
+        print('test_cosine', util.cos_sim(test_embded, q_embeddings), util.cos_sim(q_embeddings, test_embded))
+        print('test_cosine2', util.cos_sim(test_embded2, q_embeddings), util.cos_sim(q_embeddings, test_embded2))
+        q_embeddings.shape
+        q_embeddings_all = df['embeddings2']  
+        q_embeddings_all.shape
 
-    print(type(q_embeddings), type(df.iloc[0]['embeddings']), len(q_embeddings), len(df.iloc[0]['embeddings']))
+    #print(type(q_embeddings), type(df.iloc[0]['embeddings']), len(q_embeddings), len(df.iloc[0]['embeddings']))
     #print(['q_embeddings', q_embeddings])
     print(['Create_Context: ', question])
-    q_embeddings = np.array(q_embeddings)
+    if not isNewEmbed:
+        q_embeddings = np.array(q_embeddings)
 
+
+    #print(isNewEmbed, question, type(q_embeddings), df.dtypes)
     # Get the distances from the embeddings
-    df['dist'] = df.apply(lambda row: Euclidean_Dist(q_embeddings, row['embeddings'], row['text']), axis=1)
+    if not isNewEmbed:
+        df['dist'] = df.apply(lambda row: Euclidean_Dist(q_embeddings, row['embeddings'], row['text']), axis=1)
+    else:
+        #df['dist'] = df.apply(lambda row: Euclidean_Dist(q_embeddings, row['embeddings2'], row['text']), axis=1)
+        cosine_scores = util.cos_sim(q_embeddings_all, q_embeddings)
+        df['dist'] = cosine_scores
+        #print(cosine_scores)
+        #df['dist'] = df.apply(lambda row: util.cos_sim(q_embeddings, row['embeddings2']), axis=1)
+        #util.cos_sim(embedding, embedding2)
+
     df['distances'] = df['dist'] #distances_from_embeddings(q_embeddings, df['embeddings'].values, distance_metric='cosine')
     #df['dist'] = dist(q_embeddings, df['embeddings'].values)
 
     #print(["distances", df.sort_values('distances', ascending=True)])
+    #d_sorted = df.sort_values(by=['dist'], ascending=False) #dict(sorted(df.items(), key=lambda x: x[8], reverse=True))
+    #print(d_sorted)
+
     #print(["dist", df.sort_values('dist', ascending=True)])
 
     returns = []
@@ -1520,27 +1633,50 @@ def create_context(question, df, max_len=2800, size="ada"):
 
     #print(df)
     # Sort by distance and add the text to the context until the context is too long
-    for i, row in df.sort_values('distances', ascending=True).iterrows():
+    if isNewEmbed == False:
+        for i, row in df.sort_values('distances', ascending=True).iterrows():
 
-        #print([row.text, row.distances, row.fname])
+            #print([row.text, row.distances, row.fname])
 
-        # Add the length of the text to the current length
-        cur_len += row['n_tokens'] + 4
+            # Add the length of the text to the current length
+            cur_len += row['n_tokens'] + 4
 
-        # If the context is too long, break
-        if cur_len > max_len:
-            break
+            # If the context is too long, break
+            if cur_len > max_len:
+                break
 
-        #print(row)
-        #print(i - 1, cur_len, row["text"])     
-        # Else add it to the text that is being returned
-        #returns.append(row["text_orig"])
-        #print(row["text_orig"])
-        if str(row["text_orig"]) != 'nan':
-            returns.append(str(row["text_orig"]))
-        else:   
-            returns.append(str(row["text"])) 
-        retrows.append(row)
+            #print(row)
+            #print(i - 1, cur_len, row["text"])     
+            # Else add it to the text that is being returned
+            #returns.append(row["text_orig"])
+            #print(row["text_orig"])
+            if str(row["text_orig"]) != 'nan':
+                returns.append(str(row["text_orig"]))
+            else:   
+                returns.append(str(row["text"])) 
+            retrows.append(row)
+    else:
+        for i, row in df.sort_values('distances', ascending=False).iterrows():
+
+            #print([row.text, row.distances, row.fname])
+
+            # Add the length of the text to the current length
+            cur_len += row['n_tokens'] + 4
+
+            # If the context is too long, break
+            if cur_len > max_len:
+                break
+
+            #print(row)
+            #print(i - 1, cur_len, row["text"])     
+            # Else add it to the text that is being returned
+            #returns.append(row["text_orig"])
+            #print(row["text_orig"])
+            if str(row["text_orig"]) != 'nan':
+                returns.append(str(row["text_orig"]))
+            else:   
+                returns.append(str(row["text"])) 
+            retrows.append(row)        
     #print('!!!', cur_len, len(returns[0]), returns)
     # Return the context
     #print('retrows', returns)
@@ -1585,7 +1721,8 @@ def answer_question(
     debug=False,
     max_tokens=2048,#150,
     stop_sequence=None,
-    with_leaves = False
+    with_leaves = False,
+    isNewEmbed = False
 ):
     global urlsindb
     """
@@ -1596,6 +1733,7 @@ def answer_question(
         df,
         max_len=max_len,
         size=size,
+        isNewEmbed=isNewEmbed
     )
     print('ret_context:', len(ret_context[1]))
     #print('ret_context:', ret_context[1])
@@ -1743,11 +1881,18 @@ if not 'text_orig' in df and False:
 #df = df[['art', 'text','text_orig','n_tokens','embeddings']] 
 #df.to_csv('processed/embeddings_ku.csv')
 
-print(df)   
+
 #replace_pkl = True
 # try to save
 if not os.path.exists('processed/embeddings_ku.pkl') or replace_pkl:
     df.to_pickle(path='processed/embeddings_ku.pkl', compression='gzip')
+
+#print('df0', df)
+if 'qty_leaves' in df:
+    df = df.drop(columns=['qty_leaves'])
+
+if 'price_spec' in df:
+    df = df.drop(columns=['price_spec'])
 
 #get leaves
 # 
@@ -1777,6 +1922,24 @@ df['price_spec'] = df['price_spec'].fillna(0)
 df_leaves = df[df["qty_leaves"] > 0].copy()
 df_spec = df[df["price_spec"] != 0].copy()
 
+if False:
+    print('calc embeddings2')
+    # df['column'] = None
+    df["embeddings2"] = None
+    cnt = 0
+    for index, row in df.iterrows():
+        cnt+=1
+        df.at[index, 'embeddings2'] = model.encode(df.at[index, 'text'], convert_to_tensor=False)
+        if cnt % 50 == 0:
+            print(cnt)
+        #if cnt == 500:
+        #    break    
+        #embedding = model.encode(sentences, convert_to_tensor=False)
+    #embedding.shape
+    if not os.path.exists('processed/embeddings_ku2.pkl') or replace_pkl:
+        df.to_pickle(path='processed/embeddings_ku2.pkl', compression='gzip')
+
+print(df)   
 
 if os.path.exists('./processed/synonyms/synonyms_sys.xlsx'):
     df_file = pd.read_excel('./processed/synonyms/synonyms_sys.xlsx', header=None, skiprows=[0])

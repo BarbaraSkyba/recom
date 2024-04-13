@@ -174,20 +174,20 @@ def recalc_dist2(order_line, answer_line, all=False, syn_qtys = {"nums": '0.1234
   order_line_normal = replace_with_synonym(order_line_normal)[0]
   answer_line_normal = replace_with_synonym(answer_line_normal)[0]
 
-  for key, word in enumerate(answer_line.split()):
+  for key, word in enumerate(answer_line_normal.split()):
     if not word in prepos_dict.values():
         koeffs.append((1.00 - (1/(key+1)) + 0.1) * 1.00)
         koeff_sum += ((1.00 - 1/(key+1) + 0.1) * 1.00)
     else:
         koeffs.append(1)
 
-
+  #print('KOEFF', koeffs, order_line_normal, answer_line_normal)
   #print('NORMAL', order_line_normal, answer_line_normal)
   for key, word in enumerate(order_line_normal.split()):
        word_found = False
        for key2, word_res in enumerate(answer_line_normal.split()):
           #if (word_res.find(word) >= 0):
-#         print(word, p.normal_form)
+          #print(word, word_res)
 #          print('sys_qtys:', word, syn_qtys["nums"].split(','), str(word) in syn_qtys["nums"].split(','))
           if ((word == word_res and len(word) >= 2 and not word.isnumeric()) or ((word == word_res and len(word) >= 2) and word.isnumeric()) ) and not word in prepos_dict.values():
 #              print(word, word_res, koeffs[key2], koeff, key2)
@@ -488,7 +488,7 @@ def dicts():
 
     return jsonify(d)
 
-def parse_lines(Lines, Type, isOrder = True):
+def parse_lines(Lines, Type, isOrder = True, withSpec = True):
     dict = []
     i = 0
     count = 0
@@ -542,12 +542,13 @@ def parse_lines(Lines, Type, isOrder = True):
             #print('PRINT:', line_ua)
             syns = replace_with_synonym(line_ua, False)
 
-            new_line_ua = syns[0]
+            orig_line_ua = line_ua
+            line_ua = syns[0]
             #print('PRINT2:', new_line_ua, syns)
             syn_qtys = syns[1]
             
             if isOrder:
-                response_data = answer_question(df_spec, question=new_line_ua, debug=False, max_len=1200, max_tokens=400, with_leaves = True)
+                response_data = answer_question(df_spec, question=line_ua, debug=False, max_len=1200, max_tokens=400, with_leaves = True)
                 for key, r in enumerate(response_data):
                     answ_cnt +=1
                     r = response_data[key]
@@ -560,14 +561,14 @@ def parse_lines(Lines, Type, isOrder = True):
                         dist_res = recalc_dist2(line_ua, r[0])
                         dist2 = dist_res[0]
                         #print(locale.atof(str(r[6]).replace(",", ".")))
-                        if locale.atof(str(r[6]).replace(",", ".")) > 0:
+                        if locale.atof(str(r[6]).replace(",", ".")) > 0 and withSpec:
                             if len(dist_res[1]): # only if other word hear 
                                 dist2 = dist2 * SPEC_KOEF
                                 dist_res[1].append({"SPEC": SPEC_KOEF})
-                        if locale.atof(str(r[5]).replace(",", ".")) > 0:
-                            if len(dist_res[1]): # only if other word hear 
-                                dist2 = dist2 * LEAVES_KOEF
-                                dist_res[1].append({"LEAVES": LEAVES_KOEF})            
+#                        if locale.atof(str(r[5]).replace(",", ".")) > 0:
+#                            if len(dist_res[1]): # only if other word hear 
+#                                dist2 = dist2 * LEAVES_KOEF
+#                                dist_res[1].append({"LEAVES": LEAVES_KOEF})            
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
                         ret_spec.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_spec'}) #"dist_updated": r[4] - dist, 
                 
@@ -584,7 +585,7 @@ def parse_lines(Lines, Type, isOrder = True):
                         break                   
 
             if isOrder:
-                response_data = answer_question(df_leaves, question=new_line_ua, debug=False, max_len=1200, max_tokens=400, with_leaves = True)
+                response_data = answer_question(df_leaves, question=line_ua, debug=False, max_len=1200, max_tokens=400, with_leaves = True)
                 for key, r in enumerate(response_data):
                     answ_cnt +=1
                     r = response_data[key]
@@ -597,7 +598,7 @@ def parse_lines(Lines, Type, isOrder = True):
                         dist_res = recalc_dist2(line_ua, r[0])
                         dist2 = dist_res[0]
                         #print(locale.atof(str(r[6]).replace(",", ".")))
-                        if locale.atof(str(r[6]).replace(",", ".")) > 0:
+                        if locale.atof(str(r[6]).replace(",", ".")) > 0 and withSpec:
                             dist2 = dist2 * SPEC_KOEF
                             dist_res[1].append({"SPEC": SPEC_KOEF})
                         if locale.atof(str(r[5]).replace(",", ".")) > 0:
@@ -619,7 +620,7 @@ def parse_lines(Lines, Type, isOrder = True):
                         break               
 
             if isOrder:
-                response_data = answer_question(df, question=new_line_ua, debug=False, max_len=1200, max_tokens=400)
+                response_data = answer_question(df, question=line_ua, debug=False, max_len=1200, max_tokens=400)
                 dist_sum = 0
                 for key, r in enumerate(response_data):
                     answ_cnt +=1
@@ -633,12 +634,12 @@ def parse_lines(Lines, Type, isOrder = True):
                         dist = recalc_dist(line_ua, r[0])
                         dist_res = recalc_dist2(line_ua, r[0], True)
                         dist2 = dist_res[0]
-                        if locale.atof(str(r[6]).replace(",", ".")) > 0:
+                        if locale.atof(str(r[6]).replace(",", ".")) > 0 and withSpec:
                             dist2 = dist2 * SPEC_KOEF
                             dist_res[1].append({"SPEC": SPEC_KOEF})
-                        if locale.atof(str(r[5]).replace(",", ".")) > 0:
-                            dist2 = dist2 * LEAVES_KOEF
-                            dist_res[1].append({"LEAVES": LEAVES_KOEF})  
+#                        if locale.atof(str(r[5]).replace(",", ".")) > 0:
+#                            dist2 = dist2 * LEAVES_KOEF
+#                            dist_res[1].append({"LEAVES": LEAVES_KOEF})  
                         #print(locale.atof(str(r[6]).replace(",", ".")))
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
                         ret_woqty.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_all'}) # "dist_updated": r[4] - dist, 
@@ -661,7 +662,7 @@ def parse_lines(Lines, Type, isOrder = True):
                 #print(r)
 
 
-            if  ((dist_sum/5 > 0.5 and not len(art_found) > 0 and isOrder) or (line_ua != new_line_ua and isOrder)) and False: #len(dist_res[2]):
+            if  ((dist_sum/5 > 0.5 and not len(art_found) > 0 and isOrder) or (line_ua != orig_line_ua and isOrder)) and False: #len(dist_res[2]):
                 print(dist_sum, dist_sum/5, line_ua, dist_res[2])
                 #syns = replace_with_synonym(line_ua)
 
@@ -716,11 +717,11 @@ def parse_lines(Lines, Type, isOrder = True):
                 print("Синоним для ", line_ua, ": ", chat_answ)
             else:
                 if not isOrder:
-                    chat_answ = new_line_ua    
+                    chat_answ = line_ua    
 
                     #print('chat_answ', chat_answ)
                     #chat_answ = "етикетка на аркуші"
-                    new_line_ua = parse_units(new_line_ua.lower().replace(',', ' ').replace('(', ' ').replace(')', ' ').replace('"', ' ').strip())
+                    new_line_ua = parse_units(line_ua.lower().replace(',', ' ').replace('(', ' ').replace(')', ' ').replace('"', ' ').strip())
                     for word in new_line_ua.strip().split():
                         word_met = 0
                         if not word in prepos_dict.keys() and not word.isnumeric() and len(word) > 1:
@@ -773,7 +774,7 @@ def parse_lines(Lines, Type, isOrder = True):
                     print("сленги для ", line_ua, ": ", chat_answ)                    
                 else:
                     ret_all = sorted(ret_all, key=lambda d: d['dist_updated']) 
-                    val = {"row" : count, "orig": line, "orig_ua": new_line_ua, "lng": orig_lang.upper(),   "suggestions": ret_all} #"suggestions": { "spec": ret_spec_arr, "leaves" : ret_qty_arr, "all" : ret_woqty_arr, "syn": ret_syn_arr }}
+                    val = {"row" : count, "orig": line, "orig_ua": line_ua, "lng": orig_lang.upper(),   "suggestions": ret_all} #"suggestions": { "spec": ret_spec_arr, "leaves" : ret_qty_arr, "all" : ret_woqty_arr, "syn": ret_syn_arr }}
                     dict.append(val)
                     print(line_ua, dist_sum/5)
 
@@ -821,7 +822,10 @@ def  uploadfile(isOrder = True):
     i = 0
     ts = str(time.time())
     
-    print('isOrder', isOrder)
+    print('isOrder', isOrder, request.form['action'])
+    withSpec = True
+    if request.form['action'] == 'UploadWOSpec':
+        withSpec = False
 
     if request.method == 'POST':   
         f = request.files['file'] 
@@ -837,7 +841,7 @@ def  uploadfile(isOrder = True):
 #            Lines = translate_text(Lines, "Ukrainian")
 #            print(Lines)  
 
-            dict = parse_lines(Lines, 'txt', isOrder)            
+            dict = parse_lines(Lines, 'txt', isOrder, withSpec)            
             ts = str(ts) + "_txt"
 
         # doc        
@@ -848,7 +852,7 @@ def  uploadfile(isOrder = True):
             text = text.decode("utf-8")
             #text = text.split('\n')
  
-            dict = parse_lines(text.split('\n'), 'doc', isOrder) 
+            dict = parse_lines(text.split('\n'), 'doc', isOrder, withSpec) 
             ts = str(ts) + "_doc"
 
         # xls          
@@ -856,7 +860,7 @@ def  uploadfile(isOrder = True):
             is_file = True
             df_file = pd.read_excel('./uploaded/' + f.filename, header=None)
 
-            dict = parse_lines(df_file[0].tolist(), 'xls', isOrder) 
+            dict = parse_lines(df_file[0].tolist(), 'xls', isOrder, withSpec) 
             ts = str(ts) + "_xls"
 
     #print(dict)
@@ -929,6 +933,7 @@ def  maintenance():
 @app.route("/post", methods=['POST'])
 def post():
     global df
+    withSpec = True
     #request_data = request.get_json();
     request_data = json.loads(request.json)['msg']
     if 'embeddings' not in df:
@@ -1948,7 +1953,7 @@ if os.path.exists('./processed/synonyms/synonyms_sys.xlsx'):
         #f = os.path.join(directory, filename)
         # checking if it is a file
         #if os.path.isfile(f):
-        if filename != 'synonyms_sys.xlsx':
+        if filename != 'synonyms_sys.xlsx' and '.xlsx' in filename:
             print(filename)
             df_file = pd.read_excel('./processed/synonyms/' + filename, header=None, skiprows=[0])
             dict = parse_lines_synonym(df_file) 

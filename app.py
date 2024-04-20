@@ -41,6 +41,7 @@ import datetime
 from sentence_transformers import SentenceTransformer, util
 
 model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')#SentenceTransformer('paraphrase-multilingual-mpnet-base-v2')#SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')  # multi-language model
+
 #import translators as ts
 #from googletrans import Translator
 
@@ -66,6 +67,8 @@ cfg = json.load(f_cfg)
 
 apik = cfg["apik"] 
 deepl_key = cfg["deepl"] 
+api_token = cfg["api_token"] 
+
 translator = deepl.Translator(deepl_key)
 """
 try:
@@ -951,6 +954,144 @@ def post():
     #return jsonify({"a": response_data[0], "u": response_data[1]})
     return jsonify(ret)
 
+@app.route("/api/order", methods=['POST'])
+def api_order(key=None):
+    global df
+    withSpec = True
+    isOrder = True
+    #request_data = request.get_json();
+    #order  = request.args.get('order', None)
+    #syns  = request.args.get('syns', None)
+    #json.dumps(a).encode("latin-1")
+    #request.data = json.dumps(request.data).encode("utf-8")
+    #print(str(json.loads(request.data.decode('utf-8'))))
+    #return 'success', 200
+    headers = get_headers_as_dict(str(request.headers))
+
+    request_data = "" #json.loads(request.data)['msg']
+    if 'Authorization' in headers:
+
+        if request.headers.get('Authorization').split()[1] != api_token:
+            return jsonify({"status": "error", "route": "order", "error_desc": "wrong token"}), 200
+        #else:
+        #    return jsonify({"status": "success", "route": "order", "error_desc": "", "msg": request_data}), 200
+    else:
+        return jsonify({"status": "error", "route": "order", "error_desc": "wrong token"}), 200
+
+
+    print('request_data', request_data)
+    #if 'embeddings' not in df:
+    #    df=pd.read_csv('processed/embeddings_ku.csv', index_col=0)
+    #    df['embeddings'] = df['embeddings'].apply(eval).apply(np.array)
+
+    #print('response')
+    #request_data = request_data.lower().strip()
+    #response_data = answer_question(df, question=request_data, debug=False, max_len=1200, max_tokens=400)
+    #ret = []
+    #for r in response_data:
+    #    ret.append({"a": r[0], "u": r[1], "t": r[2]})
+    #print(response_data)
+    #return jsonify({"a": response_data[0], "u": response_data[1]})
+
+    global urls
+    #list = []
+    dict = []
+    i = 0
+    ts = str(time.time())
+    
+
+    if request.method == 'POST':   
+        f = request.files['file'] 
+        f.save('./uploaded/' + f.filename) 
+        print('FILE', f.filename) 
+        count = 0
+        is_file = False
+        # txt
+        if (f.filename.split('.')[-1]=='txt'):
+            is_file = True
+            file1 = open('./uploaded/' + f.filename,  mode="r", encoding="utf-8")
+            Lines = file1.readlines()
+#            print(Lines)
+#            Lines = translate_text(Lines, "Ukrainian")
+#            print(Lines)  
+
+            dict = parse_lines(Lines, 'txt', isOrder, withSpec)            
+            ts = str(ts) + "_txt"
+
+        # doc        
+        if (f.filename.split('.')[-1]=='doc' or f.filename.split('.')[-1]=='docx'):
+            is_file = True
+            text = textract.process('./uploaded/' + f.filename)
+            #Lines = text.readlines()
+            text = text.decode("utf-8")
+            #text = text.split('\n')
+ 
+            dict = parse_lines(text.split('\n'), 'doc', isOrder, withSpec) 
+            ts = str(ts) + "_doc"
+
+        # xls          
+        if (f.filename.split('.')[-1]=='xls' or f.filename.split('.')[-1]=='xlsx'):
+            is_file = True
+            df_file = pd.read_excel('./uploaded/' + f.filename, header=None)
+
+            dict = parse_lines(df_file[0].tolist(), 'xls', isOrder, withSpec) 
+            ts = str(ts) + "_xls"
+
+    #print(dict)
+
+    return jsonify({"status": "success", "route": "order", "error_desc": "", "msg": request_data, "data": json.dumps(dict, ensure_ascii=False)}), 200 
+
+    if isOrder: 
+        with open('./uploaded/' + ts+".json", "w", encoding="utf-8") as outfile:
+            json.dump(dict, outfile, ensure_ascii=False)
+        outfile.close()    
+    else:
+        write_rows = []
+        write_rows.append(["word", "orig", "row"])
+        for obj in dict:
+            #print('obj0', obj)
+            obj = eval(str(obj))#json.loads(str(obj)) # 
+            if len(obj.get("suggestions").get('syn')): 
+                for word in obj.get("suggestions").get("syn"):
+                    print ("word:", word, word.get("word"), obj.get("orig"), str(obj.get("row")))
+                    write_rows.append([word.get("word"), obj.get("orig"), obj.get("row")])
+                    #writer.writerow(word.get("word") + ',' + obj.get("orig") + ',' + str(obj.get("row")))
+        #print('write_rows', write_rows)            
+        with open('./uploaded/' + ts+'.csv', "w", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerows(write_rows) 
+
+    #print('is_file', is_file, ts)
+
+    if is_file:
+        #flash('File prepared')
+        print('Uploaded', './uploaded/' + ts+".json")
+        
+        #return send_file('./uploaded/1711314090.482361_txt.json', as_attachment=True)
+        try: 
+            if isOrder:
+                return send_file('./uploaded/' + ts+".json", as_attachment=True)  
+            else:
+                return send_file('./uploaded/' + ts+".csv", as_attachment=True) 
+        except Error:
+            print(Error)
+
+        if isOrder:
+            return render_template('upload.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = f)  
+        else:
+            return render_template('slang.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = f)
+    else: 
+        return render_template('upload.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = f)   
+
+
+
+
+
+
+
+
+
+
 @app.route("/post2", methods=['POST'])
 def post2():
     global df
@@ -983,11 +1124,17 @@ def getDBLinksList():
     cursor.close()
     connection.close()
 
-# getDBLinksList()
+def get_headers_as_dict(headers: str) -> dict:
+    dic = {}
+    for line in headers.split("\n"):
+        if line.startswith(("GET", "POST")):
+            continue
+        point_index = line.find(":")
+        dic[line[:point_index].strip()] = line[point_index+1:].strip()
+    return dic
+
 
 # Regex pattern to match a URL
-
-
 # Create a class to parse the HTML and get the hyperlinks
 class HyperlinkParser(HTMLParser):
     def __init__(self):

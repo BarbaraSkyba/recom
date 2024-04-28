@@ -28,6 +28,8 @@ import re
 
 import deepl
 
+from prestart import premain
+
 from openai.embeddings_utils import distances_from_embeddings, cosine_similarity
 # pip install plotly
 # pip install pandas==1.4.1
@@ -438,8 +440,115 @@ def  slang_html():
 def  slang():
     global urls
     return uploadfile(False)
-    #return render_template('slang.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = '')  
 
+@app.route("/dicts/update")
+def  dicts_html():
+    global urls
+    return render_template('dicts.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = '')   
+
+@app.route("/dicts/update", methods = ['POST'])
+def  dicts():
+    global urls, df
+    #return uploadfile_dict(False)
+    if request.method == 'POST':   
+        f = request.files['file'] 
+        f.save('./uploaded/' + f.filename)  
+        print('uploaded', df)
+        df_update = pd.read_csv('./uploaded/' + f.filename, sep=';', index_col=False)
+        df_dicts = pd.merge(df_update, df, left_on='code_n2', right_on='code_n2', how='left')
+        print(df_dicts)
+
+        df_dicts_new = df_dicts[df_dicts['embeddings'].isnull()]
+        print(df_dicts_new)
+        df_dicts_new = df_dicts_new.drop(columns=['parentname_n', 'un_n'])
+        """
+        for index, row in df_dicts_new.iterrows():
+                if len(row) > 0 :
+                    #print(index, df.at[index, 'text'])
+                    #print(index, df.at[index, 'text'], str(df.at[index, 'embeddings'])[1:4]) # eval(df.at[index, 'embeddings'])[0] #, type(df.at[index, 'embeddings'])) # , eval(row.embeddings).apply(np.array)[0]
+                    if (str(df.at[index, 'embeddings'])[1:6] == '-100.'):
+                        print('embedding_start', index, df.at[index, 'text'])
+                        #arr = openai.Embedding.create(input=df.loc[i2, "text"], engine='text-embedding-ada-002')['data'][0]['embedding']
+                        arr = pd.DataFrame(row).T.text.apply(lambda x: openai.Embedding.create(input=x, engine='text-embedding-ada-002')['data'][0]['embedding'])
+                        #q_embeddings = openai.Embedding.create(input=question, engine='text-embedding-ada-002')['data'][0]['embedding']
+                        #print(arr)
+                        df.at[index, 'embeddings'] = '[' + ','.join(str(f) for f in arr.iloc[0]) + ']' #np.array2string(np.array(arr.iloc[0]), separator=",") #arr.iloc[0]
+                        df.at[index, 'embeddings'] = eval(df.at[index, 'embeddings'])
+                        #print(df.at[index, 'embeddings'])
+                        i+=1
+                    else:
+                        #df.at[index, 'embeddings'] = eval(df.at[index, 'embeddings']) #df['embeddings'].apply(eval)
+                        pass
+                        #df.at[index, 'embeddings'] = np.array(df.at[index, 'embeddings'])#.apply(eval).apply(np.array)
+                        #df['embeddings'] = df['embeddings'].apply(eval).apply(np.array)
+        """
+        i = 0
+        # 1. make text lower case
+        df_dicts_new['text'] = df_dicts_new['name_n'].apply(lambda x: x.lower().replace(',', ' ').replace('(', ' ').replace(')', ' ').replace('"', ' ').replace(' д/', ' для ').strip())    
+        # 2. make text_orig
+        df_dicts_new['text_orig'] = df_dicts_new['name_n']
+        # 2.1 make art
+        df_dicts_new['art'] = df_dicts_new['art_n2']
+        # 2.2 embeddings2 
+        df_dicts_new['embeddings2'] =  [list() for x in range(len(df_dicts_new.index))]
+        # 3. calc tokens?
+        df_dicts_new['n_tokens'] = df_dicts_new.text.apply(lambda x: len(tokenizer.encode(x)))
+
+        df_dicts_new['embeddings'] = np.array2string((np.full((1536), -100.0)), separator=",")
+
+        print('df_dicts_new', df_dicts_new)
+
+        df_dicts_new.drop(columns=['name_n', 'art_n', 'art_n2', 'code_n'], inplace=True) # df_dicts_new = 
+    
+        print('df_dicts_new2', df_dicts_new)
+        df_dicts_new = df_dicts_new[['art', 'text', 'text_orig', 'n_tokens', 'embeddings', 'code_n2', 'embeddings2', 'qty_leaves', 'price_spec']]
+
+        if True:
+            for index, row in df_dicts_new.iterrows():
+            #    print(index, df.at[index, 'embeddings']) # df.iloc[[index]]
+            #    arr = pd.DataFrame(row).T.text.apply(lambda x: openai.Embedding.create(input=x, engine='text-embedding-ada-002')['data'][0]['embedding'])
+            #    print('arr', arr.iloc[0])
+                #str(df.at[index, 'embeddings']).fillna('', inplace=True)
+        #      print(str(df.at[index, 'embeddings']))
+                if df_dicts_new.at[index, 'embeddings'][0:13] == '[-100.,-100.,':
+                    if i % 50 == 0:
+                        print('embedding', index, i)
+                    try:
+                        arr = pd.DataFrame(row).T.text.apply(lambda x: openai.Embedding.create(input=x, engine='text-embedding-ada-002')['data'][0]['embedding'])
+                        #print('arr', i) # len(arr.iloc[0]) 
+                        df_dicts_new.at[index, 'embeddings'] = arr.iloc[0]
+                        i+=1
+
+                    except Exception  as e:
+                        print('error', e)
+                        df_dicts_new.at[index, 'embeddings'] = np.array2string((np.full((1536), -100.0)), separator=",") # [','.join([-1.0]*df.at[index, 'n_tokens'])] * 1 #",".join(np.full((df.at[index, 'n_tokens']), -1.0))    
+                    time.sleep(0.1) #time.sleep(1.1)
+
+        #df_dicts_new['embeddings'] = df_dicts_new['embeddings'].apply(eval)
+        
+        print('Before Un:', df_dicts_new.loc[df_dicts_new['embeddings'].str[0:13] == '[-100.,-100.,'])
+        df = pd.concat([df, df_dicts_new.loc[df_dicts_new['embeddings'].str[0:13] != '[-100.,-100.,']])
+        df['qty_leaves'] = df['qty_leaves'].fillna(0)
+        df['price_spec'] = df['price_spec'].fillna(0)
+        #df = pd.concat([df, df_dicts_new])
+        df.to_csv('processed/new_dicts/embeddings_ku2.csv') 
+
+        print ('United:', df)
+        # !!!!!!!!!!!
+        # art   text  text_orig  n_tokens   embeddings  code_n2 embeddings2 qty_leaves  price_spec
+        # !!!!!!!!!!!
+
+
+        #if (i > 0):
+        df_dicts_new.to_csv('processed/new_dicts/embeddings_ku_update.csv') 
+        df_dicts_new_empty = df_dicts_new.loc[df_dicts_new['embeddings'].str[0:13] == '[-100.,-100.,'] #df_dicts_new[df_dicts_new.at[index, 'embeddings'][0:13] == '[-100.,-100.,']
+        df_dicts_new_empty.to_csv('processed/new_dicts/embeddings_ku_update_empty.csv') 
+        # 4. unite with main DF where not filled vector and save not filled into other file
+
+        return render_template('dicts.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = '')
+
+    #return render_template('slang.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = '')  
+"""
 @app.route("/dicts/update")
 def dicts_update():
     d = []
@@ -490,8 +599,9 @@ def dicts():
         #d = "[{'id': 100, 'name': 'Tree'}, {'id': 101, 'name': 'Bench'}, {'id': 103, 'name': 'Container'}, {'id': 104, 'name': 'Mobile'}]"
 
     return jsonify(d)
-
+"""
 def parse_lines(Lines, Type, isOrder = True, withSpec = True):
+    global df
     dict = []
     i = 0
     count = 0
@@ -523,6 +633,7 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True):
         dist_sum = 0 
         dist_res = [[], [], []]
 
+        #print('LLL4', df[df['code_n2']=='g000062436'])
         if len(art_found) > 0 and isOrder :
             print('art_found.art', art_found.values[0][0], art_found.values[0][1])
             ret.append({"art": art_found.values[0][0], "name": art_found.values[0][1], "dist": 0.001, "dist_updated": 0.001, "dist_updated2": 0.001, "qty": art_found.values[0][2], "spec": art_found.values[0][3], "found": 'by_art'})
@@ -573,7 +684,7 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True):
 #                                dist2 = dist2 * LEAVES_KOEF
 #                                dist_res[1].append({"LEAVES": LEAVES_KOEF})            
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
-                        ret_spec.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_spec'}) #"dist_updated": r[4] - dist, 
+                        ret_spec.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_spec'}) #"dist_updated": r[4] - dist, 
                 
                 ret_spec = sorted(ret_spec, key=lambda d: d['dist_updated'])
                 cnt = 0
@@ -608,7 +719,7 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True):
                             dist2 = dist2 * LEAVES_KOEF
                             dist_res[1].append({"LEAVES": LEAVES_KOEF})      
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
-                        ret_qty.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_leaves'}) #  "dist_updated": r[4] - dist, 
+                        ret_qty.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_leaves'}) #  "dist_updated": r[4] - dist, 
                 
                 ret_qty = sorted(ret_qty, key=lambda d: d['dist_updated'])
                 cnt = 0
@@ -645,7 +756,7 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True):
 #                            dist_res[1].append({"LEAVES": LEAVES_KOEF})  
                         #print(locale.atof(str(r[6]).replace(",", ".")))
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
-                        ret_woqty.append({"art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_all'}) # "dist_updated": r[4] - dist, 
+                        ret_woqty.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_all'}) # "dist_updated": r[4] - dist, 
                     #ret.append(sug)
 
                 ret_woqty = sorted(ret_woqty, key=lambda d: d['dist_updated']) 
@@ -881,7 +992,7 @@ def  uploadfile(isOrder = True):
             obj = eval(str(obj))#json.loads(str(obj)) # 
             if len(obj.get("suggestions").get('syn')): 
                 for word in obj.get("suggestions").get("syn"):
-                    print ("word:", word, word.get("word"), obj.get("orig"), str(obj.get("row")))
+                    #print ("word:", word, word.get("word"), obj.get("orig"), str(obj.get("row")))
                     write_rows.append([word.get("word"), obj.get("orig"), obj.get("row")])
                     #writer.writerow(word.get("word") + ',' + obj.get("orig") + ',' + str(obj.get("row")))
         #print('write_rows', write_rows)            
@@ -954,6 +1065,146 @@ def post():
     #return jsonify({"a": response_data[0], "u": response_data[1]})
     return jsonify(ret)
 
+@app.route("/api/specs", methods=['POST'])
+def api_specs(key=None):
+    global urls, df
+    headers = get_headers_as_dict(str(request.headers))
+
+    if 'Authorization' in headers:
+        if request.headers.get('Authorization').split()[1] != api_token:
+            return jsonify({"status": "error", "route": "specs", "error_desc": "wrong token"}), 200
+    else:
+        return jsonify({"status": "error", "route": "specs", "error_desc": "wrong token"}), 200
+    
+    #return uploadfile_dict(False)
+    if request.method == 'POST':   
+        f = request.files['file'] 
+        f.save('./uploaded/' + f.filename)  
+        print('uploaded', df)
+        df_update = pd.read_csv('./uploaded/' + f.filename, sep=';', index_col=False)
+        df_specs = pd.merge(df_update, df, left_on='code_n2', right_on='code_n2', how='left')
+
+        return jsonify({"status": "success", "route": "specs", "error_desc": "", "msg": "update specs", "data": json.dumps({ "updated rows": len(df_update.index)}, ensure_ascii=False)}), 200 
+
+@app.route("/api/leaves", methods=['POST'])
+def api_leaves(key=None):
+    global urls, df
+    headers = get_headers_as_dict(str(request.headers))
+
+    if 'Authorization' in headers:
+        if request.headers.get('Authorization').split()[1] != api_token:
+            return jsonify({"status": "error", "route": "leaves", "error_desc": "wrong token"}), 200
+    else:
+        return jsonify({"status": "error", "route": "leaves", "error_desc": "wrong token"}), 200
+    
+    #return uploadfile_dict(False)
+    if request.method == 'POST':   
+        f = request.files['file'] 
+        f.save('./uploaded/' + f.filename)  
+        #print('uploaded', df)
+        df_update = pd.read_csv('./uploaded/' + f.filename, sep=';', index_col=False)
+        df_leaves = pd.merge(df, df_update, left_on='code_n2', right_on='code_n2', how='left')
+
+        print('LLL', df_leaves[df_leaves['code_n2']=='g000062436'])
+
+        df_leaves["qty_leaves"] = df_leaves["leaves_qty_l"]
+        df_leaves['qty_leaves'] = df_leaves['qty_leaves'].fillna(0)
+        df_leaves.drop(['name_l','code_l','art_l','leaves_qty_l'], axis=1, inplace=True) #["qty_leaves"]
+        df = df_leaves
+        #updated['Value'] = np.where(pd.notnull(updated['Value_new']), updated['Value_new'], updated['Value'])
+        #updated.drop('Value_new', axis=1, inplace=True)
+        print('LLL2:', df[df['code_n2']=='g000062436'])
+        print('df_leaves:', df)
+
+        return jsonify({"status": "success", "route": "leaves", "error_desc": "", "msg": "update leaves", "data": json.dumps({ "updated rows": len(df_update.index)}, ensure_ascii=False)}), 200 
+
+@app.route("/api/dicts", methods=['POST'])
+def api_dicts(key=None):
+    global urls, df
+    headers = get_headers_as_dict(str(request.headers))
+
+    if 'Authorization' in headers:
+        if request.headers.get('Authorization').split()[1] != api_token:
+            return jsonify({"status": "error", "route": "dicts", "error_desc": "wrong token"}), 200
+    else:
+        return jsonify({"status": "error", "route": "dicts", "error_desc": "wrong token"}), 200
+    
+    #return uploadfile_dict(False)
+    if request.method == 'POST':   
+        f = request.files['file'] 
+        f.save('./uploaded/' + f.filename)  
+        print('uploaded', df)
+        df_update = pd.read_csv('./uploaded/' + f.filename, sep=';', index_col=False)
+        df_dicts = pd.merge(df_update, df, left_on='code_n2', right_on='code_n2', how='left')
+        print('df_dicts', df_dicts)
+
+        df_dicts_new = df_dicts[df_dicts['embeddings'].isnull()]
+        print('df_dicts_new', df_dicts_new)
+        df_dicts_new = df_dicts_new.drop(columns=['parentname_n', 'un_n'])
+
+        i = 0
+        # 1. make text lower case
+        df_dicts_new['text'] = df_dicts_new['name_n'].apply(lambda x: x.lower().replace(',', ' ').replace('(', ' ').replace(')', ' ').replace('"', ' ').replace(' д/', ' для ').strip())    
+        # 2. make text_orig
+        df_dicts_new['text_orig'] = df_dicts_new['name_n']
+        # 2.1 make art
+        df_dicts_new['art'] = df_dicts_new['art_n2']
+        # 2.2 embeddings2 
+        df_dicts_new['embeddings2'] =  [list() for x in range(len(df_dicts_new.index))]
+        # 3. calc tokens?
+        df_dicts_new['n_tokens'] = df_dicts_new.text.apply(lambda x: len(tokenizer.encode(x)))
+
+        df_dicts_new['embeddings'] = np.array2string((np.full((1536), -100.0)), separator=",")
+
+        print('df_dicts_new', df_dicts_new)
+
+        df_dicts_new.drop(columns=['name_n', 'art_n', 'art_n2', 'code_n'], inplace=True) # df_dicts_new = 
+    
+        print('df_dicts_new2', df_dicts_new)
+        df_dicts_new = df_dicts_new[['art', 'text', 'text_orig', 'n_tokens', 'embeddings', 'code_n2', 'embeddings2', 'qty_leaves', 'price_spec']]
+
+        if True:
+            for index, row in df_dicts_new.iterrows():
+                if df_dicts_new.at[index, 'embeddings'][0:13] == '[-100.,-100.,':
+                    if i % 50 == 0:
+                        print('embedding', index, i)
+                    try:
+                        arr = pd.DataFrame(row).T.text.apply(lambda x: openai.Embedding.create(input=x, engine='text-embedding-ada-002')['data'][0]['embedding'])
+                        #print('arr', i) # len(arr.iloc[0]) 
+                        df_dicts_new.at[index, 'embeddings'] = arr.iloc[0]
+                        i+=1
+
+                    except Exception  as e:
+                        print('error', e)
+                        df_dicts_new.at[index, 'embeddings'] = np.array2string((np.full((1536), -100.0)), separator=",") # [','.join([-1.0]*df.at[index, 'n_tokens'])] * 1 #",".join(np.full((df.at[index, 'n_tokens']), -1.0))    
+                    time.sleep(0.1) #time.sleep(1.1)
+
+        #df_dicts_new['embeddings'] = df_dicts_new['embeddings'].apply(eval)
+        
+        print('Before Un:', df_dicts_new.loc[df_dicts_new['embeddings'].str[0:13] == '[-100.,-100.,'])
+        df = pd.concat([df, df_dicts_new.loc[df_dicts_new['embeddings'].str[0:13] != '[-100.,-100.,']])
+        df['qty_leaves'] = df['qty_leaves'].fillna(0)
+        df['price_spec'] = df['price_spec'].fillna(0)
+        #df = pd.concat([df, df_dicts_new])
+        df.to_csv('processed/new_dicts/embeddings_ku2.csv') 
+
+        print ('United:', df)
+        # !!!!!!!!!!!
+        # art   text  text_orig  n_tokens   embeddings  code_n2 embeddings2 qty_leaves  price_spec
+        # !!!!!!!!!!!
+
+
+        #if (i > 0):
+        df_dicts_new.to_csv('processed/new_dicts/embeddings_ku_update.csv') 
+        df_dicts_new_empty = df_dicts_new.loc[df_dicts_new['embeddings'].str[0:13] == '[-100.,-100.,'] #df_dicts_new[df_dicts_new.at[index, 'embeddings'][0:13] == '[-100.,-100.,']
+        df_dicts_new_empty.to_csv('processed/new_dicts/embeddings_ku_update_empty.csv') 
+        # 4. unite with main DF where not filled vector and save not filled into other file
+
+        #return render_template('dicts.html', page=1, web_data = True, html_data = '', web_data_len = len(urls),  temp='', file = '')
+        return jsonify({"status": "success", "route": "dicts", "error_desc": "", "msg": "update dicts", "data": json.dumps({ "added rows": i}, ensure_ascii=False)}), 200 
+    
+    pass
+
 @app.route("/api/order", methods=['POST'])
 def api_order(key=None):
     global df
@@ -999,7 +1250,7 @@ def api_order(key=None):
     i = 0
     ts = str(time.time())
     
-
+    #print('LLL3', df[df['code_n2']=='g000062436'])
     if request.method == 'POST':   
         f = request.files['file'] 
         f.save('./uploaded/' + f.filename) 
@@ -1733,10 +1984,12 @@ def embedding_checknull(df):
 #df=pd.read_csv('processed/embeddings.csv', index_col=0)
 #df['embeddings'] = df['embeddings'].apply(eval).apply(np.array)
 
-def create_context(question, df, max_len=2800, size="ada", isNewEmbed=False):
+def create_context(question, df2, max_len=2800, size="ada", isNewEmbed=False):
     """
     Create a context for a question by finding the most similar context from the dataframe
     """
+    global df
+    #print('LLL5', df[df['code_n2']=='g000062436'])
 
     # Get the embeddings for the question
     if not isNewEmbed:
@@ -1761,6 +2014,9 @@ def create_context(question, df, max_len=2800, size="ada", isNewEmbed=False):
     #print(isNewEmbed, question, type(q_embeddings), df.dtypes)
     # Get the distances from the embeddings
     if not isNewEmbed:
+       # print(df)
+       # print(len(q_embeddings), q_embeddings)
+       # print(len(df.iloc[0, 4]))
         df['dist'] = df.apply(lambda row: Euclidean_Dist(q_embeddings, row['embeddings'], row['text']), axis=1)
     else:
         #df['dist'] = df.apply(lambda row: Euclidean_Dist(q_embeddings, row['embeddings2'], row['text']), axis=1)
@@ -1865,7 +2121,7 @@ def ask_chat(
         print(e)
 
 def answer_question(
-    df,
+    df2,
     model="gpt-3.5-turbo-instruct", #"text-davinci-003",
     question="Какие существуют варианты работы с процессами?",
     max_len=1800,
@@ -1876,13 +2132,13 @@ def answer_question(
     with_leaves = False,
     isNewEmbed = False
 ):
-    global urlsindb
+    global urlsindb, df
     """
     Answer a question based on the most similar context from the dataframe texts
     """
     ret_context = create_context(
         question,
-        df,
+        df2,
         max_len=max_len,
         size=size,
         isNewEmbed=isNewEmbed
@@ -1904,7 +2160,7 @@ def answer_question(
             else:    
                 whole_context = whole_context + str(c['text']) 
                 #print('NUMBER2', str(c['text']) )
-            ret.append([whole_context, currenturl, str(n_tokens), c['art'], c['dist'], c['qty_leaves'], c['price_spec']])
+            ret.append([whole_context, currenturl, str(n_tokens), str(c['art'])[1:], c['dist'], float(str(c['qty_leaves']).replace(',', '.')), c['price_spec'], str(c['code_n2'])[1:]])
             whole_context = ''
             n_tokens = 0
 
@@ -1951,147 +2207,25 @@ def Euclidean_Dist(df1, df2, text):
     try:
         return np.linalg.norm(df1 - df2)
     except (ValueError, TypeError):
+        #print('EuclError')
+        #print('EuclError', text, len(df1), len(df2))
         pass
         #print('EuclError')
         #print([ValueError, TypeError, text])
     
-#Start reading
-i = 0
-# For Left join
-if os.path.exists('processed/scraped_ku.csv'):
-    df = pd.read_csv('processed/scraped_ku.csv', index_col=0)
-
-print(datetime.datetime.now())
-force_checking = False
-if os.path.exists('processed/embeddings_ku.pkl') and not force_checking: # and not force_checking
-    print('Read pkl')
-    df_merged = pd.read_pickle('processed/embeddings_ku.pkl', 'gzip')
-    df = df_merged
-    if 'n_tokens_y' in df and not 'n_tokens' in df:
-        df['n_tokens'] = df['n_tokens_y'] 
-        df = df.drop(columns=['n_tokens_x', 'n_tokens_y'])
-
-    #print(df)
-    #df.to_csv('processed/embeddings_ku2.csv')
-#    print(df)    
-#    df_merged['embeddings'] = df_merged['embeddings'].apply(eval).apply(np.array)
-else:	
-    # check existsing rows without vectors
-    print('Read csv')
-    if os.path.exists('processed/embeddings_ku.csv'):
-        df_embed = pd.read_csv('processed/embeddings_ku.csv', index_col=0)
-        if (False):
-            df_embed["text_orig"] = df_embed['text']#.apply(lambda x: x.lower().replace('"', " ").strip())
-            df_embed["text"] = df_embed['text'].apply(lambda x: x.lower().replace('"', " ").strip())
-            df_merged = pd.merge(df, df_embed, on=['text', 'text'], how='left')
-            df = df_merged	
-            if 'n_tokens_y' in df and not 'n_tokens' in df:
-                df['n_tokens'] = df['n_tokens_y'] 
-                df = df.drop(columns=['n_tokens_x', 'n_tokens_y'])	
-        else:
-            df = df_embed        
-
-        for index, row in df.iterrows():
-            if len(row) > 0 :
-                #print(index, df.at[index, 'text'])
-                #print(index, df.at[index, 'text'], str(df.at[index, 'embeddings'])[1:4]) # eval(df.at[index, 'embeddings'])[0] #, type(df.at[index, 'embeddings'])) # , eval(row.embeddings).apply(np.array)[0]
-                if (str(df.at[index, 'embeddings'])[1:6] == '-100.'):
-                    print('embedding_start', index, df.at[index, 'text'])
-                    #arr = openai.Embedding.create(input=df.loc[i2, "text"], engine='text-embedding-ada-002')['data'][0]['embedding']
-                    arr = pd.DataFrame(row).T.text.apply(lambda x: openai.Embedding.create(input=x, engine='text-embedding-ada-002')['data'][0]['embedding'])
-                    #q_embeddings = openai.Embedding.create(input=question, engine='text-embedding-ada-002')['data'][0]['embedding']
-                    #print(arr)
-                    df.at[index, 'embeddings'] = '[' + ','.join(str(f) for f in arr.iloc[0]) + ']' #np.array2string(np.array(arr.iloc[0]), separator=",") #arr.iloc[0]
-                    df.at[index, 'embeddings'] = eval(df.at[index, 'embeddings'])
-                    #print(df.at[index, 'embeddings'])
-                    i+=1
-                else:
-                    #df.at[index, 'embeddings'] = eval(df.at[index, 'embeddings']) #df['embeddings'].apply(eval)
-                    pass
-                    #df.at[index, 'embeddings'] = np.array(df.at[index, 'embeddings'])#.apply(eval).apply(np.array)
-                    #df['embeddings'] = df['embeddings'].apply(eval).apply(np.array)
-
-        df['embeddings'] = df['embeddings'].apply(eval)
-
-        if (i > 0):
-            df.to_csv('processed/embeddings_ku.csv') 
-
-#print(df)
-#print(['null', len(df[df.embeddings[0] == -1])])
-print(datetime.datetime.now())
-
-replace_pkl = False
-
-# check or add lowercase names
-if not 'text_orig' in df and False:
-    df["text_orig"] = df['text']#.apply(lambda x: x.lower().replace('"', " ").strip())
-    df["text"] = df['text'].apply(lambda x: x.lower().replace('"', " ").strip())
-    replace_pkl = True
-    df.to_csv('processed/embeddings_ku.csv') 
 
 
-#df = df[['art', 'text','text_orig','n_tokens','embeddings']] 
-#df.to_csv('processed/embeddings_ku.csv')
+arr = premain() # with_relink = False, replace_pkl = True, force_checking = True
+df = arr[0]
+df_leaves = arr[1]
+df_spec = arr[2]
+
+#if 'code_n2' in df:
+#    df.rename(columns={"code_n2": "code"}, inplace=True)
+
+print(df)    
 
 
-#replace_pkl = True
-# try to save
-if not os.path.exists('processed/embeddings_ku.pkl') or replace_pkl:
-    df.to_pickle(path='processed/embeddings_ku.pkl', compression='gzip')
-
-#print('df0', df)
-if 'qty_leaves' in df:
-    df = df.drop(columns=['qty_leaves'])
-
-if 'price_spec' in df:
-    df = df.drop(columns=['price_spec'])
-
-#get leaves
-# 
-df_leaves = pd.DataFrame()
-if os.path.exists('processed/leaves/leaves_ku.csv'):
-    df_leaves = pd.read_csv('processed/leaves/leaves_ku.csv', sep=';', index_col=False)
-    df_leaves['art_leaves'] = 'g' + ('000000' + df_leaves['art_leaves'].astype(str)).str[-6:]
-
-df = pd.merge(df, df_leaves, left_on='art', right_on='art_leaves', how='left')#df.merge(df_leaves, left_on='art', right_on='art_leaves', validate='one_to_one')#pd.merge(df, df_leaves, on=['art', 'art_leaves'], how='left')#df.merge(df_leaves, on=['art_leaves', 'art'], how='left')
-df = df.drop(columns=['name_leaves', 'code_leaves', 'art_leaves'])	
-
-
-#get specs        
-if os.path.exists('processed/leaves/spec_ku.csv'):
-    df_spec = pd.read_csv('processed/leaves/spec_ku.csv', sep=';', index_col=False)
-    df_spec['art_spec'] = 'g' + ('000000' + df_spec['art_spec'].astype(str)).str[-6:]
-
-df_spec = df_spec.drop(columns=['№_spec', 'code_spec', 'name_spec'])	
-
-df = pd.merge(df, df_spec, left_on='art', right_on='art_spec', how='left')#df.merge(df_leaves, left_on='art', right_on='art_leaves', validate='one_to_one')#pd.merge(df, df_leaves, on=['art', 'art_leaves'], how='left')#df.merge(df_leaves, on=['art_leaves', 'art'], how='left')
-#df = df.drop(columns=['№_spec', 'code_spec', 'art_spec', 'name_spec'])	
-df = df.drop(columns=['art_spec'])
-
-df['qty_leaves'] = df['qty_leaves'].fillna(0)
-df['price_spec'] = df['price_spec'].fillna(0)
-
-df_leaves = df[df["qty_leaves"] > 0].copy()
-df_spec = df[df["price_spec"] != 0].copy()
-
-if False:
-    print('calc embeddings2')
-    # df['column'] = None
-    df["embeddings2"] = None
-    cnt = 0
-    for index, row in df.iterrows():
-        cnt+=1
-        df.at[index, 'embeddings2'] = model.encode(df.at[index, 'text'], convert_to_tensor=False)
-        if cnt % 50 == 0:
-            print(cnt)
-        #if cnt == 500:
-        #    break    
-        #embedding = model.encode(sentences, convert_to_tensor=False)
-    #embedding.shape
-    if not os.path.exists('processed/embeddings_ku2.pkl') or replace_pkl:
-        df.to_pickle(path='processed/embeddings_ku2.pkl', compression='gzip')
-
-print(df)   
 
 if os.path.exists('./processed/synonyms/synonyms_sys.xlsx'):
     df_file = pd.read_excel('./processed/synonyms/synonyms_sys.xlsx', header=None, skiprows=[0])
@@ -2112,27 +2246,6 @@ if os.path.exists('./processed/synonyms/synonyms_sys.xlsx'):
 #dict_synonym_values = {}
 #print('syn_t:', dict_synonym_terms)
 print('syn_v:', dict_synonym_values)
-#print('syn_v_a:', dict_synonym_values_adds)
-#print('syn_v_s:', dict_synonym_values_sorted)
-
-#df_spec["price_spec"] = df_spec["price_spec"].values[0]
-#df_spec["price_spec"] = df_spec["price_spec"].astype(str).replace(",", ".") #str(df_spec["price_spec"]).replace(",", ".")
-#df_spec["price_spec"] = float(df_spec["price_spec"].replace(",", "."))
-#df['price_spec'] = locale.atof(str(df['price_spec']).replace(",", "."))
-#df_spec = df[df["price_spec"] > 0].copy()
-#print(df[df["price_spec"] != 0])
-#print(df.dtypes)
-#print(df_spec.dtypes)
-#print(type(df_spec["price_spec"].values[0]))
-#print(df_spec)
-#print(df)
-#print(df_leaves)
-#print(df_spec)
-#print(df)
-#df.to_csv('processed/leaves/leaves_ku2.csv') 
-#df = pd.read_pickle('processed/embeddings_ku.pkl', 'gzip')
-
-#print(df)
 
 if __name__ == '__main__':
 	app.run(debug=True)

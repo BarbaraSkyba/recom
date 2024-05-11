@@ -96,6 +96,8 @@ app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
 
 SPEC_KOEF = 0.5
 LEAVES_KOEF = 0.8
+SALES_KOEF = 0.9
+
 reInit = False
 
 CORS(app)
@@ -706,7 +708,10 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True, client = ""):
 #                                dist_res[1].append({"LEAVES": LEAVES_KOEF})            
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
                         df_sales_l = df_sales_cl[df_sales_cl['code_n2'].str.contains(r[7])]
-                        
+                        if len(df_sales_l.index) > 0:
+                            dist_res[1].append({"SALES": SALES_KOEF})
+                            dist2 = dist2 * SALES_KOEF
+
                         ret_spec.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "sales": float(len(df_sales_l.index)), "found": 'by_spec'}) #"dist_updated": r[4] - dist, 
                 
                 ret_spec = sorted(ret_spec, key=lambda d: d['dist_updated'])
@@ -743,6 +748,9 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True, client = ""):
                             dist_res[1].append({"LEAVES": LEAVES_KOEF})      
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
                         df_sales_l = df_sales_cl[df_sales_cl['code_n2'].str.contains(r[7])]
+                        if len(df_sales_l.index) > 0:
+                            dist_res[1].append({"SALES": SALES_KOEF})
+                            dist2 = dist2 * SALES_KOEF
 
                         ret_qty.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "sales": float(len(df_sales_l.index)), "found": 'by_leaves'}) #  "dist_updated": r[4] - dist, 
                 
@@ -782,6 +790,9 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True, client = ""):
                         #print(locale.atof(str(r[6]).replace(",", ".")))
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
                         df_sales_l = df_sales_cl[df_sales_cl['code_n2'].str.contains(r[7])]
+                        if len(df_sales_l.index) > 0:
+                            dist_res[1].append({"SALES": SALES_KOEF})
+                            dist2 = dist2 * SALES_KOEF
 
                         ret_woqty.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "sales": float(len(df_sales_l.index)), "found": 'by_all'}) # "dist_updated": r[4] - dist, 
                     #ret.append(sug)

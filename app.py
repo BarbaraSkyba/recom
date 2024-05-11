@@ -122,7 +122,9 @@ urls = ""
 urlsindb = set()
 df = pd.DataFrame()
 df_embed = pd.DataFrame()
-df_merged = pd.to_datetime
+df_merged = pd.DataFrame() #pd.to_datetime
+df_spec = pd.DataFrame()
+df_sales = pd.DataFrame()
 
 tokenizer = tiktoken.get_encoding("cl100k_base")
 
@@ -600,8 +602,8 @@ def dicts():
 
     return jsonify(d)
 """
-def parse_lines(Lines, Type, isOrder = True, withSpec = True):
-    global df
+def parse_lines(Lines, Type, isOrder = True, withSpec = True, client = ""):
+    global df, df_spec, df_sales
     dict = []
     i = 0
     count = 0
@@ -662,7 +664,26 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True):
             syn_qtys = syns[1]
             
             if isOrder:
-                response_data = answer_question(df_spec, question=line_ua, debug=False, max_len=1200, max_tokens=400, with_leaves = True)
+                # create new df_spec
+                #pd.merge(df_update, df, left_on='code_n2', right_on='code_n2', how='left')
+                if len(client) == 0:
+                    client = '00000000000000'
+
+                client_code = str('g' + client)
+                print('client_code', client_code)
+                df_spec_cl = df_spec[df_spec['code_a2'].str.contains(client_code)].copy()
+                #print('df_spec', df_spec)
+                #print('df_spec_cl', df_spec_cl)
+                df_spec_cl = pd.merge(df_spec_cl, df, left_on='code_n2', right_on='code_n2', how='left')   
+
+                #df_spec_cl = df_spec_cl[df_spec_cl['code_a2'] == client_code]
+                print('df_spec_cl', df_spec_cl)
+                df_spec_cl['price_spec'] = 1.0
+
+                df_sales_cl = df_sales[df_sales['code_a2'].str.contains(client_code)].copy()
+                df_sales_cl = pd.merge(df_sales_cl, df, left_on='code_n2', right_on='code_n2', how='left')  
+
+                response_data = answer_question(df_spec_cl, question=line_ua, debug=False, max_len=1200, max_tokens=400, with_leaves = True)
                 for key, r in enumerate(response_data):
                     answ_cnt +=1
                     r = response_data[key]
@@ -684,7 +705,9 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True):
 #                                dist2 = dist2 * LEAVES_KOEF
 #                                dist_res[1].append({"LEAVES": LEAVES_KOEF})            
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
-                        ret_spec.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_spec'}) #"dist_updated": r[4] - dist, 
+                        df_sales_l = df_sales_cl[df_sales_cl['code_n2'].str.contains(r[7])]
+                        
+                        ret_spec.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "sales": float(len(df_sales_l.index)), "found": 'by_spec'}) #"dist_updated": r[4] - dist, 
                 
                 ret_spec = sorted(ret_spec, key=lambda d: d['dist_updated'])
                 cnt = 0
@@ -719,7 +742,9 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True):
                             dist2 = dist2 * LEAVES_KOEF
                             dist_res[1].append({"LEAVES": LEAVES_KOEF})      
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
-                        ret_qty.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_leaves'}) #  "dist_updated": r[4] - dist, 
+                        df_sales_l = df_sales_cl[df_sales_cl['code_n2'].str.contains(r[7])]
+
+                        ret_qty.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "sales": float(len(df_sales_l.index)), "found": 'by_leaves'}) #  "dist_updated": r[4] - dist, 
                 
                 ret_qty = sorted(ret_qty, key=lambda d: d['dist_updated'])
                 cnt = 0
@@ -756,7 +781,9 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True):
 #                            dist_res[1].append({"LEAVES": LEAVES_KOEF})  
                         #print(locale.atof(str(r[6]).replace(",", ".")))
                         #sug = Suggestion(r[3], r[0], r[4], r[4] - dist)
-                        ret_woqty.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "found": 'by_all'}) # "dist_updated": r[4] - dist, 
+                        df_sales_l = df_sales_cl[df_sales_cl['code_n2'].str.contains(r[7])]
+
+                        ret_woqty.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "sales": float(len(df_sales_l.index)), "found": 'by_all'}) # "dist_updated": r[4] - dist, 
                     #ret.append(sug)
 
                 ret_woqty = sorted(ret_woqty, key=lambda d: d['dist_updated']) 
@@ -941,6 +968,9 @@ def  uploadfile(isOrder = True):
     if request.form['action'] == 'UploadWOSpec':
         withSpec = False
 
+    client = request.form['client'] #json.loads(request.data)['agent'] #request.POST.get('agent','')
+    print('agent: ', client) 
+
     if request.method == 'POST':   
         f = request.files['file'] 
         f.save('./uploaded/' + f.filename)  
@@ -955,7 +985,7 @@ def  uploadfile(isOrder = True):
 #            Lines = translate_text(Lines, "Ukrainian")
 #            print(Lines)  
 
-            dict = parse_lines(Lines, 'txt', isOrder, withSpec)            
+            dict = parse_lines(Lines, 'txt', isOrder, withSpec, client)            
             ts = str(ts) + "_txt"
 
         # doc        
@@ -966,7 +996,7 @@ def  uploadfile(isOrder = True):
             text = text.decode("utf-8")
             #text = text.split('\n')
  
-            dict = parse_lines(text.split('\n'), 'doc', isOrder, withSpec) 
+            dict = parse_lines(text.split('\n'), 'doc', isOrder, withSpec, client) 
             ts = str(ts) + "_doc"
 
         # xls          
@@ -974,7 +1004,7 @@ def  uploadfile(isOrder = True):
             is_file = True
             df_file = pd.read_excel('./uploaded/' + f.filename, header=None)
 
-            dict = parse_lines(df_file[0].tolist(), 'xls', isOrder, withSpec) 
+            dict = parse_lines(df_file[0].tolist(), 'xls', isOrder, withSpec, client) 
             ts = str(ts) + "_xls"
 
     #print(dict)
@@ -1067,7 +1097,7 @@ def post():
 
 @app.route("/api/specs", methods=['POST'])
 def api_specs(key=None):
-    global urls, df
+    global urls, df, df_spec
     headers = get_headers_as_dict(str(request.headers))
 
     if 'Authorization' in headers:
@@ -1075,17 +1105,44 @@ def api_specs(key=None):
             return jsonify({"status": "error", "route": "specs", "error_desc": "wrong token"}), 200
     else:
         return jsonify({"status": "error", "route": "specs", "error_desc": "wrong token"}), 200
-    
+# name_agent_s;code_agent_s;name_dict_s;code_dict_s;code_agent_s_n;code_dict_s_n
+# САНДОРА ТОВ;000010084;Скоба N10 1000шт  JOBMAX BM.4401;000000037;g000010084;g000000037   
     #return uploadfile_dict(False)
     if request.method == 'POST':   
         f = request.files['file'] 
         f.save('./uploaded/' + f.filename)  
         print('uploaded', df)
-        df_update = pd.read_csv('./uploaded/' + f.filename, sep=';', index_col=False)
-        df_specs = pd.merge(df_update, df, left_on='code_n2', right_on='code_n2', how='left')
+        df_uploaded = pd.read_csv('./uploaded/' + f.filename, sep=';', index_col=False)
+        df_uploaded.to_csv('processed/leaves/spec_all_ku.csv', index=False, encoding="utf-8", sep=';')
+        df_spec = pd.merge(df_uploaded, df, left_on='code_n2', right_on='code_n2', how='left')
+        #df_spec['price_spec'] = 1
 
-        return jsonify({"status": "success", "route": "specs", "error_desc": "", "msg": "update specs", "data": json.dumps({ "updated rows": len(df_update.index)}, ensure_ascii=False)}), 200 
+        return jsonify({"status": "success", "route": "specs", "error_desc": "", "msg": "update specs", "data": json.dumps({ "updated rows": len(df_uploaded.index)}, ensure_ascii=False)}), 200 
 
+@app.route("/api/sales", methods=['POST'])
+def api_sales(key=None):
+    global urls, df, df_sales
+    headers = get_headers_as_dict(str(request.headers))
+
+    if 'Authorization' in headers:
+        if request.headers.get('Authorization').split()[1] != api_token:
+            return jsonify({"status": "error", "route": "sales", "error_desc": "wrong token"}), 200
+    else:
+        return jsonify({"status": "error", "route": "sales", "error_desc": "wrong token"}), 200
+# name_agent_s;code_agent_s;name_dict_s;code_dict_s;code_agent_s_n;code_dict_s_n
+# САНДОРА ТОВ;000010084;Скоба N10 1000шт  JOBMAX BM.4401;000000037;g000010084;g000000037   
+    #return uploadfile_dict(False)
+    if request.method == 'POST':   
+        f = request.files['file'] 
+        f.save('./uploaded/' + f.filename)  
+        print('uploaded', df)
+        df_uploaded = pd.read_csv('./uploaded/' + f.filename, sep=';', index_col=False)
+        df_uploaded.to_csv('processed/leaves/sales_all_ku.csv', index=False, encoding="utf-8", sep=';')
+        df_sales = pd.merge(df_uploaded, df, left_on='code_n2', right_on='code_n2', how='left')
+        #df_spec['price_spec'] = 1
+
+        return jsonify({"status": "success", "route": "sales", "error_desc": "", "msg": "update sales", "data": json.dumps({ "updated rows": len(df_uploaded.index)}, ensure_ascii=False)}), 200 
+    
 @app.route("/api/leaves", methods=['POST'])
 def api_leaves(key=None):
     global urls, df
@@ -1102,21 +1159,24 @@ def api_leaves(key=None):
         f = request.files['file'] 
         f.save('./uploaded/' + f.filename)  
         #print('uploaded', df)
-        df_update = pd.read_csv('./uploaded/' + f.filename, sep=';', index_col=False)
-        df_leaves = pd.merge(df, df_update, left_on='code_n2', right_on='code_n2', how='left')
+        df_uploaded = pd.read_csv('./uploaded/' + f.filename, sep=';', index_col=False)
+        df_uploaded.to_csv('processed/leaves/leaves_all_ku.csv', index=False, encoding="utf-8", sep=';')
+        df_leaves = pd.merge(df, df_uploaded, left_on='code_n2', right_on='code_n2', how='left')
 
-        print('LLL', df_leaves[df_leaves['code_n2']=='g000062436'])
+        #print('LLL', df_leaves[df_leaves['code_n2']=='g000062436'])
 
         df_leaves["qty_leaves"] = df_leaves["leaves_qty_l"]
         df_leaves['qty_leaves'] = df_leaves['qty_leaves'].fillna(0)
+        df_leaves.loc[df_leaves.qty_leaves > 0, "qty_leaves"] = 1
+        #df.loc[df.price_spec > 0, "price_spec"] = 1
         df_leaves.drop(['name_l','code_l','art_l','leaves_qty_l'], axis=1, inplace=True) #["qty_leaves"]
         df = df_leaves
         #updated['Value'] = np.where(pd.notnull(updated['Value_new']), updated['Value_new'], updated['Value'])
         #updated.drop('Value_new', axis=1, inplace=True)
-        print('LLL2:', df[df['code_n2']=='g000062436'])
-        print('df_leaves:', df)
+        #print('LLL2:', df[df['code_n2']=='g000062436'])
+        #print('df_leaves:', df)
 
-        return jsonify({"status": "success", "route": "leaves", "error_desc": "", "msg": "update leaves", "data": json.dumps({ "updated rows": len(df_update.index)}, ensure_ascii=False)}), 200 
+        return jsonify({"status": "success", "route": "leaves", "error_desc": "", "msg": "update leaves", "data": json.dumps({ "updated rows": len(df_uploaded.index)}, ensure_ascii=False)}), 200 
 
 @app.route("/api/dicts", methods=['POST'])
 def api_dicts(key=None):
@@ -1231,6 +1291,8 @@ def api_order(key=None):
 
 
     print('request_data', request_data)
+    client = request.form['client'] #json.loads(request.data)['agent'] #request.POST.get('agent','')
+    print('agent: ', client) 
     #if 'embeddings' not in df:
     #    df=pd.read_csv('processed/embeddings_ku.csv', index_col=0)
     #    df['embeddings'] = df['embeddings'].apply(eval).apply(np.array)
@@ -1266,7 +1328,7 @@ def api_order(key=None):
 #            Lines = translate_text(Lines, "Ukrainian")
 #            print(Lines)  
 
-            dict = parse_lines(Lines, 'txt', isOrder, withSpec)            
+            dict = parse_lines(Lines, 'txt', isOrder, withSpec, client)            
             ts = str(ts) + "_txt"
 
         # doc        
@@ -1277,7 +1339,7 @@ def api_order(key=None):
             text = text.decode("utf-8")
             #text = text.split('\n')
  
-            dict = parse_lines(text.split('\n'), 'doc', isOrder, withSpec) 
+            dict = parse_lines(text.split('\n'), 'doc', isOrder, withSpec, client) 
             ts = str(ts) + "_doc"
 
         # xls          
@@ -1285,7 +1347,7 @@ def api_order(key=None):
             is_file = True
             df_file = pd.read_excel('./uploaded/' + f.filename, header=None)
 
-            dict = parse_lines(df_file[0].tolist(), 'xls', isOrder, withSpec) 
+            dict = parse_lines(df_file[0].tolist(), 'xls', isOrder, withSpec, client) 
             ts = str(ts) + "_xls"
 
     #print(dict)
@@ -1988,7 +2050,8 @@ def create_context(question, df2, max_len=2800, size="ada", isNewEmbed=False):
     """
     Create a context for a question by finding the most similar context from the dataframe
     """
-    global df
+    #global df
+    df = df2
     #print('LLL5', df[df['code_n2']=='g000062436'])
 
     # Get the embeddings for the question
@@ -2219,6 +2282,7 @@ arr = premain() # with_relink = False, replace_pkl = True, force_checking = True
 df = arr[0]
 df_leaves = arr[1]
 df_spec = arr[2]
+df_sales = arr[3]
 
 #if 'code_n2' in df:
 #    df.rename(columns={"code_n2": "code"}, inplace=True)

@@ -132,6 +132,10 @@
         <h3>Замовлення</h3>
         {% if web_data %}
           <form action = "/upload" method = "post" enctype="multipart/form-data">   
+            <div style="margin-bottom: 10px;">
+              <label for="client">Код клієнта:</label><br>
+              <input type="text" id="client" name="client"><br>
+            </div>
             <div style="display: flex;">
               <input type="file" name="file" />   
               <input type = "submit" name = "action" value = "Upload">

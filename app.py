@@ -96,7 +96,7 @@ app.secret_key = b'_5#y2L"F4Q8z\n\xec]/'
 
 SPEC_KOEF = 0.5
 LEAVES_KOEF = 0.8
-SALES_KOEF = 0.9
+SALES_KOEF = 0.8
 
 reInit = False
 
@@ -280,7 +280,7 @@ def find_art(df, string):
         #print(word, word.isnumeric(), len(word))
         if word.isnumeric() and len(word) == 6:
             #print('g'+word)
-            newstring = df.loc[df['art'] == ('g'+word), ['art', 'text', 'qty_leaves', 'price_spec']]
+            newstring = df.loc[df['art'] == ('g'+word), ['art', 'text', 'qty_leaves', 'price_spec', 'code_n2']]
 
     return newstring
 
@@ -639,8 +639,16 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True, client = ""):
 
         #print('LLL4', df[df['code_n2']=='g000062436'])
         if len(art_found) > 0 and isOrder :
-            print('art_found.art', art_found.values[0][0], art_found.values[0][1])
+            print('art_found.art', art_found.values[0][0], art_found.values[0][1], art_found.values[0][4][1:])
             ret.append({"art": art_found.values[0][0], "name": art_found.values[0][1], "dist": 0.001, "dist_updated": 0.001, "dist_updated2": 0.001, "qty": art_found.values[0][2], "spec": art_found.values[0][3], "found": 'by_art'})
+            df_sales_l = df_sales_cl[df_sales_cl['code_n2'].str.contains(art_found.values[0][4][1:])]
+            #if len(df_sales_l.index) > 0:
+            #    dist_res[1].append({"SALES": SALES_KOEF})
+            #    dist2 = dist2 * SALES_KOEF
+
+            #ret_spec.append({"code": r[7], "art": r[3], "name": r[0], "dist": r[4], "dist_updated": r[4] * dist2, "dist_hist": dist_res[1], "qty": r[5], "spec": r[6], "sales": float(len(df_sales_l.index)), "found": 'by_spec'}) #"dist_updated": r[4] - dist, 
+
+            ret_all.append({"code": art_found.values[0][4][1:], "art": art_found.values[0][0][1:], "name": art_found.values[0][1], "dist": 0.001, "dist_updated": 0.001, "dist_updated2": 0.001, "qty": art_found.values[0][2], "spec": art_found.values[0][3], "sales": float(len(df_sales_l.index)), "found": 'by_art'})
 
         if len(line) > 0:
             count += 1
@@ -679,7 +687,7 @@ def parse_lines(Lines, Type, isOrder = True, withSpec = True, client = ""):
                 df_spec_cl = pd.merge(df_spec_cl, df, left_on='code_n2', right_on='code_n2', how='left')   
 
                 #df_spec_cl = df_spec_cl[df_spec_cl['code_a2'] == client_code]
-                print('df_spec_cl', df_spec_cl)
+                #print('df_spec_cl', df_spec_cl)
                 df_spec_cl['price_spec'] = 1.0
 
                 df_sales_cl = df_sales[df_sales['code_a2'].str.contains(client_code)].copy()
